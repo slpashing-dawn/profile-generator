@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>캐릭터 프로필 빌더</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1a2e; --panel: #16213e; --panel2: #0f3460;
+    --accent: #e94560; --accent2: #533483;
+    --text: #eaeaea; --text-m: #aaaacc;
+    --border: #2a2a4a; --input-bg: #0d1b2a;
+    --success: #4caf50;
+  }
+  body { font-family: 'Segoe UI','Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+
+  /* ── 헤더 ── */
+  .app-header { background:linear-gradient(135deg,var(--panel2),var(--accent2)); padding:10px 20px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .app-header h1 { font-size:16px; font-weight:700; letter-spacing:.05em; color:#fff; }
+  .app-header .sub { font-size:11px; color:rgba(255,255,255,.7); margin-top:1px; }
+  .header-actions { display:flex; gap:8px; }
+  .btn { padding:6px 14px; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; transition:all .2s; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:#c73652; }
+  .btn-secondary { background:rgba(255,255,255,.15); color:#fff; }
+  .btn-secondary:hover { background:rgba(255,255,255,.25); }
+  .btn-ghost { background:transparent; color:var(--text-m); border:1px solid var(--border); }
+  .btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* ── 레이아웃 ── */
+  .app-body { display:flex; flex:1; overflow:hidden; }
+  .edit-panel { width:400px; flex-shrink:0; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+
+  /* ── 탭 ── */
+  .tab-bar { display:flex; border-bottom:1px solid var(--border); flex-shrink:0; background:var(--bg); }
+  .tab { flex:1; padding:9px 3px; text-align:center; font-size:10.5px; font-weight:600; cursor:pointer; color:var(--text-m); border-bottom:2px solid transparent; transition:all .2s; user-select:none; }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .tab:hover:not(.active) { color:var(--text); }
+  .tab-content { flex:1; overflow-y:auto; padding:14px; display:none; }
+  .tab-content.active { display:block; }
+
+  /* ── 폼 ── */
+  .form-group { margin-bottom:12px; }
+  label { display:block; font-size:11px; color:var(--text-m); margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  input[type="text"], textarea, select { width:100%; background:var(--input-bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; padding:7px 10px; transition:border-color .2s; font-family:inherit; }
+  input[type="color"] { width:100%; height:34px; padding:2px 6px; background:var(--input-bg); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+  input:focus, textarea:focus, select:focus { outline:none; border-color:var(--accent); }
+  textarea { resize:vertical; min-height:80px; line-height:1.5; }
+  select { appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%23aaa' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; padding-right:24px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .row3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+
+  .section-title { font-size:12px; font-weight:700; color:var(--text); text-transform:uppercase; letter-spacing:.06em; margin:16px 0 8px; padding-bottom:4px; border-bottom:1px solid var(--border); }
+  .section-title:first-child { margin-top:0; }
+
+  .color-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .color-item { display:flex; align-items:center; gap:6px; }
+  .color-item label { margin:0; flex:1; font-size:10px; }
+  .color-item input[type="color"] { width:40px; flex-shrink:0; }
+
+  /* ── 목차 편집기 ── */
+  .toc-list { list-style:none; }
+  .toc-item { background:var(--input-bg); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; overflow:hidden; }
+  .toc-item-header { display:flex; align-items:center; gap:6px; padding:7px 8px; }
+  .toc-drag { color:var(--text-m); font-size:13px; cursor:grab; }
+  .toc-num-badge { font-size:10px; font-weight:700; color:var(--accent); width:22px; text-align:center; flex-shrink:0; }
+  .toc-item-header input[type="text"] { flex:1; background:transparent; border:none; padding:2px 4px; font-size:12px; color:var(--text); border-bottom:1px solid transparent; }
+  .toc-item-header input[type="text"]:focus { border-bottom-color:var(--accent); outline:none; }
+  .toc-item-actions { display:flex; gap:4px; }
+  .toc-btn { background:none; border:none; color:var(--text-m); cursor:pointer; font-size:12px; padding:2px 4px; border-radius:3px; transition:all .15s; }
+  .toc-btn:hover { background:rgba(255,255,255,.1); color:var(--text); }
+  .toc-btn.danger:hover { color:var(--accent); }
+  .toc-btn.add-child { color:#4caf50; }
+  .toc-children { padding:0 8px 6px 28px; display:none; }
+  .toc-item.expanded > .toc-children { display:block; }
+  .toc-sub-list { list-style:none; }
+  .toc-sub-item { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:4px; margin-bottom:4px; overflow:hidden; }
+  .toc-sub-header { display:flex; align-items:center; gap:6px; padding:5px 7px; }
+  .toc-sub-num { font-size:10px; color:var(--text-m); width:28px; flex-shrink:0; }
+  .toc-sub-header input[type="text"] { flex:1; background:transparent; border:none; padding:2px 4px; font-size:11px; color:var(--text); border-bottom:1px solid transparent; }
+  .toc-sub-header input[type="text"]:focus { border-bottom-color:var(--accent); outline:none; }
+  .toc-sub-children { padding:0 6px 4px 22px; display:none; }
+  .toc-sub-item.expanded > .toc-sub-children { display:block; }
+  .toc-sub2-list { list-style:none; }
+  .toc-sub2-item { background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.05); border-radius:3px; margin-bottom:3px; }
+  .toc-sub2-header { display:flex; align-items:center; gap:5px; padding:4px 6px; }
+  .toc-sub2-num { font-size:9px; color:var(--text-m); width:34px; flex-shrink:0; }
+  .toc-sub2-header input[type="text"] { flex:1; background:transparent; border:none; padding:2px 3px; font-size:11px; color:var(--text); border-bottom:1px solid transparent; }
+  .toc-sub2-header input[type="text"]:focus { border-bottom-color:var(--accent); outline:none; }
+  .add-section-btn { width:100%; padding:8px; background:rgba(233,69,96,.1); border:1px dashed var(--accent); border-radius:6px; color:var(--accent); cursor:pointer; font-size:12px; font-weight:600; text-align:center; transition:all .2s; margin-top:8px; }
+  .add-section-btn:hover { background:rgba(233,69,96,.2); }
+
+  /* ── 섹션 편집기 ── */
+  .section-editor { border:1px solid var(--border); border-radius:8px; overflow:hidden; margin-bottom:12px; }
+  .section-editor-header { background:var(--input-bg); padding:8px 12px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; user-select:none; }
+  .section-editor-header:hover { background:rgba(255,255,255,.05); }
+  .section-editor-title { font-size:12px; font-weight:700; color:var(--text); }
+  .section-editor-toggle { color:var(--text-m); font-size:11px; }
+  .section-editor-body { padding:10px; display:none; }
+  .section-editor.open > .section-editor-body { display:block; }
+  .toolbar { display:flex; gap:3px; margin-bottom:6px; flex-wrap:wrap; background:var(--bg); padding:5px 6px; border-radius:6px; border:1px solid var(--border); }
+  .toolbar-btn { background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:4px; color:var(--text); font-size:11px; padding:3px 7px; cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .toolbar-btn:hover { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .toolbar-divider { width:1px; background:var(--border); margin:2px 2px; }
+
+  /* ── 각주 편집기 ── */
+  .footnote-item { display:flex; gap:6px; align-items:flex-start; margin-bottom:6px; background:var(--input-bg); border:1px solid var(--border); border-radius:6px; padding:6px 8px; }
+  .footnote-num { font-size:11px; color:var(--accent); font-weight:700; padding-top:4px; min-width:26px; flex-shrink:0; }
+  .footnote-item input { flex:1; }
+
+  /* ── 인포박스 행 ── */
+  .ib-row-item { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin-bottom:4px; }
+  .ib-row-item input { font-size:11px; }
+
+  /* ── 미리보기 ── */
+  .preview-panel { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+  .preview-toolbar { background:var(--panel); border-bottom:1px solid var(--border); padding:8px 14px; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .preview-toolbar span { font-size:11px; color:var(--text-m); }
+  .preview-frame-wrap { flex:1; overflow:hidden; position:relative; }
+  #preview-frame { width:100%; height:100%; border:none; background:white; }
+
+  /* ── 코드 패널 ── */
+  .code-panel { background:var(--panel); border-top:1px solid var(--border); flex-shrink:0; max-height:0; overflow:hidden; transition:max-height .3s ease; }
+  .code-panel.open { max-height:280px; }
+  .code-panel-header { padding:8px 14px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+  .code-panel-header span { font-size:12px; font-weight:700; }
+  #code-output { width:100%; height:200px; background:#0d1117; border:none; color:#c9d1d9; font-family:'Consolas','Courier New',monospace; font-size:11px; padding:12px; resize:none; line-height:1.5; }
+
+  /* ── 폰트 탭 UI ── */
+  .font-slot { background:var(--input-bg); border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:10px; }
+  .font-slot-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .font-slot-label { font-size:11px; font-weight:700; color:var(--accent); }
+  .font-preset-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .preset-chip { padding:3px 9px; background:rgba(255,255,255,.07); border:1px solid var(--border); border-radius:99px; font-size:10px; color:var(--text-m); cursor:pointer; transition:all .15s; white-space:nowrap; }
+  .preset-chip:hover, .preset-chip.active { background:rgba(233,69,96,.2); border-color:var(--accent); color:var(--accent); }
+  .wf-list { list-style:none; }
+  .wf-item { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:6px; padding:8px 10px; margin-bottom:6px; }
+  .wf-item-head { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+  .wf-item-head input[type="text"] { flex:1; }
+  .wf-faces { }
+  .wf-face-row { display:grid; grid-template-columns:80px 1fr 80px; gap:5px; margin-bottom:4px; align-items:center; }
+  .wf-face-row input { font-size:11px; }
+  .wf-face-label { font-size:10px; color:var(--text-m); text-align:right; padding-right:4px; }
+  .add-wf-btn { width:100%; padding:5px; background:rgba(76,175,80,.1); border:1px dashed #4caf50; border-radius:5px; color:#4caf50; cursor:pointer; font-size:11px; font-weight:600; text-align:center; margin-top:4px; }
+  .add-wf-btn:hover { background:rgba(76,175,80,.2); }
+
+  /* ── 폰트 대상별 패널 ── */
+  .font-target-tabs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:10px; }
+  .font-target-tab { padding:4px 10px; background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:5px; font-size:11px; cursor:pointer; color:var(--text-m); transition:all .15s; }
+  .font-target-tab.active { background:rgba(233,69,96,.2); border-color:var(--accent); color:var(--accent); font-weight:700; }
+
+  ::-webkit-scrollbar { width:5px; height:5px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--accent2); }
+
+  .live-badge { display:inline-block; background:var(--success); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:99px; text-transform:uppercase; letter-spacing:.05em; animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  .chip { display:inline-flex; align-items:center; gap:4px; background:rgba(233,69,96,.15); border:1px solid rgba(233,69,96,.3); border-radius:99px; padding:2px 8px; font-size:10px; color:var(--accent); font-weight:600; }
+  .hint { font-size:10px; color:var(--text-m); line-height:1.5; margin-top:4px; padding:6px 8px; background:rgba(255,255,255,.03); border-radius:4px; border-left:2px solid var(--accent2); }
+  .format-guide { font-size:10px; color:var(--text-m); margin-top:4px; }
+  .format-guide code { background:rgba(255,255,255,.08); border-radius:3px; padding:0 4px; font-family:monospace; font-size:10px; color:#aef; }
+  .toast { position:fixed; bottom:20px; right:20px; background:var(--success); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; z-index:9999; transform:translateY(60px); opacity:0; transition:all .3s ease; pointer-events:none; }
+  .toast.show { transform:translateY(0); opacity:1; }
+  .font-preview-text { font-size:11px; color:var(--text-m); margin-top:6px; padding:6px 8px; background:var(--bg); border-radius:4px; font-style:italic; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>✦ 캐릭터 프로필 빌더</h1>
+    <div class="sub">티스토리 HTML 에디터용 코드 생성기</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-secondary" onclick="toggleCode()">📋 HTML 코드 보기</button>
+    <button class="btn btn-secondary" onclick="copyCode()">📄 복사</button>
+    <button class="btn btn-primary" onclick="downloadCode()">⬇ 다운로드</button>
+  </div>
+</header>
+
+<div class="app-body">
+  <aside class="edit-panel">
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchTab('tab-toc')">📑 목차</div>
+      <div class="tab" onclick="switchTab('tab-infobox')">📋 인포박스</div>
+      <div class="tab" onclick="switchTab('tab-content')">✏ 내용</div>
+      <div class="tab" onclick="switchTab('tab-footnote')">📌 각주</div>
+      <div class="tab" onclick="switchTab('tab-font')">🔤 폰트</div>
+      <div class="tab" onclick="switchTab('tab-style')">🎨 색상</div>
+    </div>
+
+    <!-- 목차 탭 -->
+    <div id="tab-toc" class="tab-content active">
+      <div class="hint">섹션 제목을 수정하거나 추가/삭제하세요. ▶ 클릭 시 하위 목차를 펼칩니다.</div><br>
+      <ul class="toc-list" id="toc-list"></ul>
+      <button class="add-section-btn" onclick="addSection()">＋ 대분류 섹션 추가</button>
+    </div>
+
+    <!-- 인포박스 탭 -->
+    <div id="tab-infobox" class="tab-content">
+      <div class="section-title">캐릭터 이름</div>
+      <div class="form-group"><input type="text" id="ib-charname" placeholder="이름 (한글 · 로마자)" oninput="scheduleRender()"></div>
+      <div class="section-title">에피그라프 (명대사)</div>
+      <div class="form-group"><label>제목</label><input type="text" id="epigraph-title" placeholder="예) ἐπίφορος" oninput="scheduleRender()"></div>
+      <div class="form-group"><label>명대사 내용</label><input type="text" id="epigraph-text" placeholder="예) 앞장서겠습니다." oninput="scheduleRender()"></div>
+      <div class="form-group row2">
+        <div><label>배경색</label><input type="color" id="epigraph-bg" value="#F9D142" oninput="scheduleRender()"></div>
+        <div><label>글자색</label><input type="color" id="epigraph-color" value="#292826" oninput="scheduleRender()"></div>
+      </div>
+      <div class="section-title">인포박스 행 <button class="toc-btn add-child" onclick="addIbRow()" style="font-size:11px;">＋ 행 추가</button></div>
+      <div class="hint">항목명 | 값 쌍으로 입력 (행당 최대 3쌍)</div>
+      <div id="ib-rows"></div>
+    </div>
+
+    <!-- 내용 탭 -->
+    <div id="tab-content" class="tab-content">
+      <div class="hint">각 섹션의 내용을 입력하세요.</div>
+      <div class="format-guide" style="margin-bottom:10px;">
+        서식: <code>**굵게**</code> <code>*기울임*</code> <code>~~취소선~~</code>
+        각주: <code>[^레이블]</code> 더보기: <code>[more]내용[/more]</code>
+      </div>
+      <div id="section-editors"></div>
+    </div>
+
+    <!-- 각주 탭 -->
+    <div id="tab-footnote" class="tab-content">
+      <div class="hint">각주 추가 시 클릭 시 말풍선 팝업이 자동 구현됩니다. 본문에서 <code style="background:rgba(255,255,255,.1);padding:1px 4px;border-radius:3px;font-family:monospace">[^레이블]</code>로 삽입하세요.</div><br>
+      <div id="footnote-list"></div>
+      <button class="add-section-btn" onclick="addFootnote()">＋ 각주 추가</button>
+    </div>
+
+    <!-- ════ 폰트 탭 ════ -->
+    <div id="tab-font" class="tab-content">
+      <div class="hint" style="margin-bottom:12px;">영역별로 서로 다른 폰트를 적용할 수 있습니다. @font-face 웹폰트를 직접 등록하거나 Google Fonts / CDN URL을 사용하세요.</div>
+
+      <!-- 대상 선택 탭 -->
+      <div class="font-target-tabs" id="font-target-tabs">
+        <div class="font-target-tab active" data-target="body" onclick="switchFontTarget('body')">본문 전체</div>
+        <div class="font-target-tab" data-target="h2" onclick="switchFontTarget('h2')">대제목 (H2)</div>
+        <div class="font-target-tab" data-target="h3" onclick="switchFontTarget('h3')">소제목 (H3)</div>
+        <div class="font-target-tab" data-target="h4" onclick="switchFontTarget('h4')">세부제목 (H4)</div>
+        <div class="font-target-tab" data-target="toc" onclick="switchFontTarget('toc')">목차</div>
+        <div class="font-target-tab" data-target="infobox" onclick="switchFontTarget('infobox')">인포박스</div>
+        <div class="font-target-tab" data-target="footnote" onclick="switchFontTarget('footnote')">각주</div>
+        <div class="font-target-tab" data-target="tooltip" onclick="switchFontTarget('tooltip')">말풍선</div>
+      </div>
+
+      <!-- 대상별 패널 (JS로 렌더링) -->
+      <div id="font-target-panel"></div>
+    </div>
+
+    <!-- 색상 탭 -->
+    <div id="tab-style" class="tab-content">
+      <div class="section-title">기본 색상</div>
+      <div class="color-grid">
+        <div class="color-item"><label>배경색</label><input type="color" id="s-bg" value="#ffffff" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>본문 텍스트</label><input type="color" id="s-text" value="#202122" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>링크색</label><input type="color" id="s-link" value="#3366cc" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>보조 텍스트</label><input type="color" id="s-text-m" value="#54595d" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>테두리색</label><input type="color" id="s-border" value="#a2a9b1" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>연한 테두리</label><input type="color" id="s-border-lt" value="#d9d9d9" oninput="scheduleRender()"></div>
+      </div>
+      <div class="section-title">목차 박스</div>
+      <div class="color-grid">
+        <div class="color-item"><label>목차 배경</label><input type="color" id="s-toc-bg" value="#f8f9fa" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>목차 헤더</label><input type="color" id="s-toc-head" value="#eaecf0" oninput="scheduleRender()"></div>
+      </div>
+      <div class="section-title">섹션 제목</div>
+      <div class="color-grid">
+        <div class="color-item"><label>H2 글자색</label><input type="color" id="s-h2-color" value="#202122" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>H2 번호색</label><input type="color" id="s-h2-num" value="#54595d" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>H3 글자색</label><input type="color" id="s-h3-color" value="#202122" oninput="scheduleRender()"></div>
+        <div class="color-item"><label>H3 번호색</label><input type="color" id="s-h3-num" value="#72777d" oninput="scheduleRender()"></div>
+      </div>
+      <div class="section-title">기본 크기 / 간격</div>
+      <div class="form-group row2">
+        <div><label>기본 폰트 크기</label><input type="text" id="s-fontsize" value="14px" oninput="scheduleRender()"></div>
+        <div><label>줄 간격</label><input type="text" id="s-lineheight" value="1.7" oninput="scheduleRender()"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 미리보기 -->
+  <main class="preview-panel">
+    <div class="preview-toolbar">
+      <span class="live-badge">LIVE</span>
+      <span>실시간 미리보기</span>
+      <div style="margin-left:auto;display:flex;gap:8px;"><span class="chip">↕ 스크롤 가능</span></div>
+    </div>
+    <div class="preview-frame-wrap">
+      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+    </div>
+    <div class="code-panel" id="code-panel">
+      <div class="code-panel-header">
+        <span>📋 생성된 HTML 코드</span>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="copyCode()">복사</button>
+          <button class="btn btn-ghost" style="font-size:11px;" onclick="toggleCode()">닫기</button>
+        </div>
+      </div>
+      <textarea id="code-output" readonly></textarea>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════
+//  폰트 프리셋 데이터베이스
+// ════════════════════════════════════════════════════════
+const FONT_PRESETS = {
+  'Pretendard': {
+    label: 'Pretendard',
+    import: null, // @font-face 방식
+    faces: [
+      { weight: '100', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Thin.woff2' },
+      { weight: '200', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-ExtraLight.woff2' },
+      { weight: '300', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Light.woff2' },
+      { weight: '400', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Regular.woff2' },
+      { weight: '500', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Medium.woff2' },
+      { weight: '600', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-SemiBold.woff2' },
+      { weight: '700', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Bold.woff2' },
+      { weight: '800', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-ExtraBold.woff2' },
+      { weight: '900', url: 'https://cdn.jsdelivr.net/gh/projectnoonnu/pretendard@1.0/Pretendard-Black.woff2' },
+    ]
+  },
+  'Noto Sans KR': {
+    label: 'Noto Sans KR',
+    import: 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap',
+    faces: []
+  },
+  'Noto Serif KR': {
+    label: 'Noto Serif KR',
+    import: 'https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@200;300;400;500;600;700;900&display=swap',
+    faces: []
+  },
+  'Gowun Dodum': {
+    label: '고운돋움',
+    import: 'https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap',
+    faces: []
+  },
+  'Gowun Batang': {
+    label: '고운바탕',
+    import: 'https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap',
+    faces: []
+  },
+  'Nanum Gothic': {
+    label: '나눔고딕',
+    import: 'https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap',
+    faces: []
+  },
+  'Nanum Myeongjo': {
+    label: '나눔명조',
+    import: 'https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap',
+    faces: []
+  },
+  'Black Han Sans': {
+    label: '블랙한산스',
+    import: 'https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap',
+    faces: []
+  },
+  'Hahmlet': {
+    label: '함렛',
+    import: 'https://fonts.googleapis.com/css2?family=Hahmlet:wght@100;200;300;400;500;600;700;800;900&display=swap',
+    faces: []
+  },
+  '시스템': {
+    label: '시스템 기본',
+    import: null,
+    faces: []
+  },
+};
+
+// ── 폰트 대상 정의 ──
+const FONT_TARGETS = [
+  { id: 'body',     label: '본문 전체',    desc: '기본 폰트. 설정하지 않은 요소는 모두 이 폰트를 따릅니다.' },
+  { id: 'h2',       label: '대제목 (H2)',  desc: '섹션 대제목에 적용됩니다.' },
+  { id: 'h3',       label: '소제목 (H3)',  desc: '소제목에 적용됩니다.' },
+  { id: 'h4',       label: '세부제목 (H4)',desc: '세부 제목에 적용됩니다.' },
+  { id: 'toc',      label: '목차',         desc: '목차 박스 내 텍스트에 적용됩니다.' },
+  { id: 'infobox',  label: '인포박스',     desc: '인포박스 테이블에 적용됩니다.' },
+  { id: 'footnote', label: '각주',         desc: '각주 섹션 텍스트에 적용됩니다.' },
+  { id: 'tooltip',  label: '말풍선',       desc: '각주 클릭 시 표시되는 말풍선에 적용됩니다.' },
+];
+
+// ════════════════════════════════════════════════════════
+//  상태 모델
+// ════════════════════════════════════════════════════════
+let state = {
+  sections: [
+    { id:'s1', title:'외형 및 인물', expanded:true, children:[
+      { id:'s1-1', title:'외형', expanded:false, children:[] },
+      { id:'s1-2', title:'성격', expanded:false, children:[] },
+      { id:'s1-3', title:'말투 및 행동 특성', expanded:false, children:[] },
+    ]},
+    { id:'s2', title:'능력 및 기술', expanded:false, children:[
+      { id:'s2-1', title:'전반적인 평가', expanded:false, children:[] },
+      { id:'s2-2', title:'전투직업', expanded:false, children:[] },
+    ]},
+    { id:'s3', title:'특기, 취미 및 선호', expanded:false, children:[
+      { id:'s3-1', title:'특기', expanded:false, children:[] },
+      { id:'s3-2', title:'취미', expanded:false, children:[] },
+    ]},
+    { id:'s4', title:'여담', expanded:false, children:[] },
+    { id:'s5', title:'각주', expanded:false, children:[] },
+  ],
+  content: {},
+  infobox: {
+    charname:'캐릭터 이름',
+    epigraphTitle:'ἐπίφορος', epigraphText:'앞장서겠습니다.',
+    epigraphBg:'#F9D142', epigraphColor:'#292826',
+    rows:[
+      ['종족 / 성별','','직업','','총사령부',''],
+      ['신장 / 몸무게','','소속','','수호신',''],
+      ['생일','','출생지','','체향',''],
+      ['나이','','거주지','','상징물',''],
+    ]
+  },
+  footnotes:[
+    { label:'스포일러', text:'이 부분은 스포일러가 포함되어 있습니다.' },
+    { label:'2', text:'작중 묘사 참고.' },
+  ],
+  style:{
+    bg:'#ffffff', text:'#202122', link:'#3366cc',
+    textM:'#54595d', border:'#a2a9b1', borderLt:'#d9d9d9',
+    tocBg:'#f8f9fa', tocHead:'#eaecf0',
+    h2Color:'#202122', h2Num:'#54595d',
+    h3Color:'#202122', h3Num:'#72777d',
+    fontSize:'14px', lineHeight:'1.7',
+  },
+  // 폰트 설정: 대상별
+  fonts: {
+    // body: { preset, family, size, weight, customFaces:[], googleUrl, customCss }
+    body:     { preset:'Pretendard', family:'Pretendard', size:'', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
+    h2:       { preset:'inherit', family:'', size:'20px', weight:'700', customFaces:[], googleUrl:'', customCss:'' },
+    h3:       { preset:'inherit', family:'', size:'16px', weight:'700', customFaces:[], googleUrl:'', customCss:'' },
+    h4:       { preset:'inherit', family:'', size:'14px', weight:'700', customFaces:[], googleUrl:'', customCss:'' },
+    toc:      { preset:'inherit', family:'', size:'13.5px', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
+    infobox:  { preset:'inherit', family:'', size:'', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
+    footnote: { preset:'inherit', family:'', size:'12.5px', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
+    tooltip:  { preset:'inherit', family:'', size:'13px', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
+  }
+};
+
+let sectionCounter = 10;
+let renderTimer = null;
+let currentFontTarget = 'body';
+
+// ════════════════════════════════════════════════════════
+//  탭 전환
+// ════════════════════════════════════════════════════════
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const ids = ['tab-toc','tab-infobox','tab-content','tab-footnote','tab-font','tab-style'];
+  document.querySelectorAll('.tab')[ids.indexOf(id)].classList.add('active');
+  if (id==='tab-content') renderSectionEditors();
+  if (id==='tab-footnote') renderFootnoteList();
+  if (id==='tab-infobox') renderIbRows();
+  if (id==='tab-font') renderFontPanel(currentFontTarget);
+}
+
+// ════════════════════════════════════════════════════════
+//  폰트 탭 렌더링
+// ════════════════════════════════════════════════════════
+function switchFontTarget(id) {
+  currentFontTarget = id;
+  document.querySelectorAll('.font-target-tab').forEach(t=>{
+    t.classList.toggle('active', t.dataset.target===id);
+  });
+  renderFontPanel(id);
+}
+
+function renderFontPanel(targetId) {
+  const panel = document.getElementById('font-target-panel');
+  const target = FONT_TARGETS.find(t=>t.id===targetId);
+  const f = state.fonts[targetId];
+
+  const presetOpts = ['inherit', ...Object.keys(FONT_PRESETS)].map(k => {
+    const lbl = k==='inherit' ? '— 상속 (부모 폰트 따름)' : (FONT_PRESETS[k]?.label || k);
+    return `<option value="${k}" ${f.preset===k?'selected':''}>${lbl}</option>`;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="font-slot">
+      <div class="font-slot-header">
+        <span class="font-slot-label">● ${target.label}</span>
+      </div>
+      <div class="hint" style="margin-bottom:10px;">${target.desc}</div>
+
+      <div class="form-group">
+        <label>프리셋 폰트 선택</label>
+        <select id="fp-preset" onchange="onPresetChange('${targetId}',this.value)">
+          ${presetOpts}
+        </select>
+      </div>
+
+      <div id="fp-preset-detail"></div>
+
+      <div class="form-group">
+        <label>font-family 직접 입력 <span style="color:var(--text-m);font-weight:400;">(프리셋 적용 시 자동 입력됨)</span></label>
+        <input type="text" id="fp-family" value="${escHtml(f.family)}" placeholder="예) 'Pretendard', sans-serif"
+          oninput="state.fonts['${targetId}'].family=this.value;scheduleRender();">
+      </div>
+
+      <div class="row2" style="margin-bottom:12px;">
+        <div class="form-group" style="margin:0;">
+          <label>font-size</label>
+          <input type="text" id="fp-size" value="${escHtml(f.size)}" placeholder="예) 14px, 1em"
+            oninput="state.fonts['${targetId}'].size=this.value;scheduleRender();">
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label>font-weight</label>
+          <select id="fp-weight" onchange="state.fonts['${targetId}'].weight=this.value;scheduleRender();">
+            ${['100','200','300','400','500','600','700','800','900'].map(w=>`<option ${f.weight===w?'selected':''}>${w}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Google Fonts URL 직접 입력 -->
+      <div class="form-group">
+        <label>Google Fonts / CDN @import URL <span style="color:var(--text-m);font-weight:400;">(선택)</span></label>
+        <input type="text" id="fp-gurl" value="${escHtml(f.googleUrl)}" placeholder="https://fonts.googleapis.com/css2?family=..."
+          oninput="state.fonts['${targetId}'].googleUrl=this.value;scheduleRender();">
+      </div>
+
+      <!-- @font-face 커스텀 -->
+      <div class="section-title" style="margin-top:14px;">@font-face 직접 등록</div>
+      <div class="hint" style="margin-bottom:8px;">woff2 URL과 weight를 입력하면 @font-face를 자동 생성합니다. 프리셋 적용 시 자동으로 채워집니다.</div>
+      <div id="fp-faces-list"></div>
+      <button class="add-wf-btn" onclick="addFontFace('${targetId}')">＋ @font-face 행 추가</button>
+
+      <!-- 커스텀 CSS -->
+      <div class="section-title" style="margin-top:14px;">추가 CSS <span style="color:var(--text-m);font-size:10px;font-weight:400;">(이 요소에만 적용)</span></div>
+      <textarea id="fp-custom-css" rows="3" placeholder="예) letter-spacing: -0.02em; text-shadow: none;"
+        oninput="state.fonts['${targetId}'].customCss=this.value;scheduleRender();"
+      >${escHtml(f.customCss)}</textarea>
+
+      <div class="font-preview-text" id="fp-preview">미리보기: 가나다라마바사 The quick brown fox jumps over the lazy dog</div>
+    </div>
+  `;
+
+  renderFontFacesList(targetId);
+  updateFontPreview(targetId);
+  // 프리셋에 따른 detail 렌더
+  renderPresetDetail(targetId, f.preset);
+}
+
+function renderPresetDetail(targetId, preset) {
+  const el = document.getElementById('fp-preset-detail');
+  if (!el) return;
+  const f = state.fonts[targetId];
+  if (preset === 'inherit' || !FONT_PRESETS[preset]) { el.innerHTML = ''; return; }
+  const p = FONT_PRESETS[preset];
+  if (p.import) {
+    el.innerHTML = `<div class="hint" style="margin-bottom:8px;">✓ Google Fonts URL: <code style="font-size:10px;color:#aef;word-break:break-all;">${p.import}</code></div>`;
+  } else if (p.faces.length) {
+    el.innerHTML = `<div class="hint" style="margin-bottom:8px;">✓ @font-face CDN ${p.faces.length}개 웨이트가 자동 등록됩니다.</div>`;
+  }
+}
+
+function onPresetChange(targetId, preset) {
+  const f = state.fonts[targetId];
+  f.preset = preset;
+  if (preset === 'inherit') {
+    f.family = ''; f.googleUrl = ''; f.customFaces = [];
+    document.getElementById('fp-family').value = '';
+    document.getElementById('fp-gurl').value = '';
+  } else if (FONT_PRESETS[preset]) {
+    const p = FONT_PRESETS[preset];
+    // family 이름 세팅
+    if (preset === '시스템') {
+      f.family = "'맑은 고딕','Malgun Gothic',sans-serif";
+    } else {
+      f.family = `'${preset}', sans-serif`;
+    }
+    document.getElementById('fp-family').value = f.family;
+
+    if (p.import) {
+      f.googleUrl = p.import;
+      document.getElementById('fp-gurl').value = p.import;
+      f.customFaces = [];
+    } else if (p.faces.length) {
+      f.googleUrl = '';
+      document.getElementById('fp-gurl').value = '';
+      f.customFaces = p.faces.map(face => ({ weight: face.weight, url: face.url, style: 'normal' }));
+    }
+  }
+  renderPresetDetail(targetId, preset);
+  renderFontFacesList(targetId);
+  updateFontPreview(targetId);
+  scheduleRender();
+}
+
+function renderFontFacesList(targetId) {
+  const f = state.fonts[targetId];
+  const el = document.getElementById('fp-faces-list');
+  if (!el) return;
+  el.innerHTML = '';
+  (f.customFaces || []).forEach((face, i) => {
+    const row = document.createElement('div');
+    row.className = 'wf-item';
+    row.innerHTML = `
+      <div style="display:grid;grid-template-columns:70px 1fr 70px 20px;gap:5px;align-items:center;">
+        <select style="font-size:11px;" onchange="state.fonts['${targetId}'].customFaces[${i}].weight=this.value;scheduleRender();">
+          ${['100','200','300','400','500','600','700','800','900'].map(w=>`<option ${face.weight===w?'selected':''}>${w}</option>`).join('')}
+        </select>
+        <input type="text" value="${escHtml(face.url)}" placeholder="woff2 URL"
+          style="font-size:11px;"
+          oninput="state.fonts['${targetId}'].customFaces[${i}].url=this.value;scheduleRender();">
+        <select style="font-size:11px;" onchange="state.fonts['${targetId}'].customFaces[${i}].style=this.value;scheduleRender();">
+          <option ${(face.style||'normal')==='normal'?'selected':''}>normal</option>
+          <option ${face.style==='italic'?'selected':''}>italic</option>
+        </select>
+        <button class="toc-btn danger" onclick="state.fonts['${targetId}'].customFaces.splice(${i},1);renderFontFacesList('${targetId}');scheduleRender();">✕</button>
+      </div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function addFontFace(targetId) {
+  if (!state.fonts[targetId].customFaces) state.fonts[targetId].customFaces = [];
+  state.fonts[targetId].customFaces.push({ weight:'400', url:'', style:'normal' });
+  renderFontFacesList(targetId);
+}
+
+function updateFontPreview(targetId) {
+  const f = state.fonts[targetId];
+  const el = document.getElementById('fp-preview');
+  if (!el) return;
+  if (f.family && f.family !== 'inherit') {
+    el.style.fontFamily = f.family;
+    el.style.fontWeight = f.weight || '400';
+    if (f.size) el.style.fontSize = f.size;
+  } else {
+    el.style.fontFamily = '';
+    el.style.fontWeight = '';
+    el.style.fontSize = '';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  목차 렌더링
+// ════════════════════════════════════════════════════════
+function renderTocList() {
+  const list = document.getElementById('toc-list');
+  list.innerHTML = '';
+  state.sections.forEach((sec,si) => list.appendChild(buildTocItem(sec,si)));
+}
+
+function buildTocItem(sec,si) {
+  const li = document.createElement('li');
+  li.className = 'toc-item'+(sec.expanded?' expanded':'');
+  li.dataset.id = sec.id;
+  const header = document.createElement('div');
+  header.className = 'toc-item-header';
+  header.innerHTML = `
+    <span class="toc-drag">⠿</span>
+    <span class="toc-num-badge">${si+1}.</span>
+    <input type="text" value="${escHtml(sec.title)}" placeholder="섹션 제목">
+    <div class="toc-item-actions">
+      <button class="toc-btn" title="하위목차 펼치기" onclick="toggleTocExpand('${sec.id}')">${sec.expanded?'▼':'▶'}</button>
+      <button class="toc-btn add-child" title="하위 추가" onclick="addSubSection('${sec.id}')">＋</button>
+      <button class="toc-btn danger" onclick="deleteSection('${sec.id}')">✕</button>
+    </div>`;
+  header.querySelector('input').addEventListener('input',e=>{sec.title=e.target.value;scheduleRender();});
+  const children = document.createElement('div');
+  children.className = 'toc-children';
+  const subList = document.createElement('ul');
+  subList.className = 'toc-sub-list';
+  sec.children.forEach((sub,ci)=>subList.appendChild(buildTocSubItem(sub,si,ci,sec.id)));
+  children.appendChild(subList);
+  children.innerHTML += `<button class="add-section-btn" style="font-size:11px;padding:5px;margin-top:4px;" onclick="addSubSection('${sec.id}')">＋ 하위 항목 추가</button>`;
+  li.appendChild(header); li.appendChild(children);
+  return li;
+}
+
+function buildTocSubItem(sub,si,ci,parentId) {
+  const li = document.createElement('li');
+  li.className = 'toc-sub-item'+(sub.expanded?' expanded':'');
+  const header = document.createElement('div');
+  header.className = 'toc-sub-header';
+  header.innerHTML = `
+    <span class="toc-sub-num">${si+1}.${ci+1}.</span>
+    <input type="text" value="${escHtml(sub.title)}" placeholder="소제목">
+    <div class="toc-item-actions">
+      <button class="toc-btn" onclick="toggleSubExpand('${parentId}','${sub.id}')">${sub.expanded?'▼':'▶'}</button>
+      <button class="toc-btn add-child" onclick="addSubSubSection('${parentId}','${sub.id}')">＋</button>
+      <button class="toc-btn danger" onclick="deleteSubSection('${parentId}','${sub.id}')">✕</button>
+    </div>`;
+  header.querySelector('input').addEventListener('input',e=>{sub.title=e.target.value;scheduleRender();});
+  const subChildren = document.createElement('div');
+  subChildren.className = 'toc-sub-children';
+  const sub2List = document.createElement('ul');
+  sub2List.className = 'toc-sub2-list';
+  (sub.children||[]).forEach((sub2,di)=>sub2List.appendChild(buildTocSub2Item(sub2,si,ci,di,parentId,sub.id)));
+  subChildren.appendChild(sub2List);
+  subChildren.innerHTML += `<button class="add-section-btn" style="font-size:10px;padding:4px;margin-top:3px;" onclick="addSubSubSection('${parentId}','${sub.id}')">＋ 하위하위 항목 추가</button>`;
+  li.appendChild(header); li.appendChild(subChildren);
+  return li;
+}
+
+function buildTocSub2Item(sub2,si,ci,di,parentId,subId) {
+  const li = document.createElement('li');
+  li.className = 'toc-sub2-item';
+  const header = document.createElement('div');
+  header.className = 'toc-sub2-header';
+  header.innerHTML = `
+    <span class="toc-sub2-num">${si+1}.${ci+1}.${di+1}.</span>
+    <input type="text" value="${escHtml(sub2.title)}" placeholder="세부 제목">
+    <div class="toc-item-actions">
+      <button class="toc-btn danger" onclick="deleteSub2Section('${parentId}','${subId}','${sub2.id}')">✕</button>
+    </div>`;
+  header.querySelector('input').addEventListener('input',e=>{sub2.title=e.target.value;scheduleRender();});
+  li.appendChild(header);
+  return li;
+}
+
+function toggleTocExpand(id) { const s=state.sections.find(s=>s.id===id); if(s){s.expanded=!s.expanded;renderTocList();} }
+function toggleSubExpand(pId,sId) { const p=state.sections.find(s=>s.id===pId); if(!p)return; const s=p.children.find(c=>c.id===sId); if(s){s.expanded=!s.expanded;renderTocList();} }
+function addSection() { sectionCounter++; state.sections.push({id:'s'+sectionCounter,title:'새 섹션',expanded:false,children:[]}); renderTocList();scheduleRender(); }
+function addSubSection(pId) { const p=state.sections.find(s=>s.id===pId); if(!p)return; sectionCounter++; p.children.push({id:pId+'-'+sectionCounter,title:'새 소제목',expanded:false,children:[]}); p.expanded=true; renderTocList();scheduleRender(); }
+function addSubSubSection(pId,sId) { const p=state.sections.find(s=>s.id===pId); if(!p)return; const s=p.children.find(c=>c.id===sId); if(!s)return; sectionCounter++; s.children.push({id:sId+'-'+sectionCounter,title:'새 세부 제목'}); s.expanded=true; renderTocList();scheduleRender(); }
+function deleteSection(id) { state.sections=state.sections.filter(s=>s.id!==id); renderTocList();scheduleRender(); }
+function deleteSubSection(pId,sId) { const p=state.sections.find(s=>s.id===pId); if(p)p.children=p.children.filter(c=>c.id!==sId); renderTocList();scheduleRender(); }
+function deleteSub2Section(pId,sId,s2Id) { const p=state.sections.find(s=>s.id===pId); if(!p)return; const s=p.children.find(c=>c.id===sId); if(s)s.children=(s.children||[]).filter(c=>c.id!==s2Id); renderTocList();scheduleRender(); }
+
+// ════════════════════════════════════════════════════════
+//  인포박스
+// ════════════════════════════════════════════════════════
+function renderIbRows() {
+  const wrap = document.getElementById('ib-rows');
+  wrap.innerHTML = '';
+  state.infobox.rows.forEach((row,ri) => {
+    const rowEl = document.createElement('div');
+    rowEl.style.cssText = 'margin-bottom:8px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:7px 8px;';
+    rowEl.innerHTML = `<div style="font-size:10px;color:var(--text-m);margin-bottom:5px;"><button class="toc-btn danger" onclick="deleteIbRow(${ri})" style="float:right;font-size:11px;">✕</button>행 ${ri+1}</div>`;
+    for (let ci=0;ci<3;ci++) {
+      const pair = document.createElement('div');
+      pair.className = 'ib-row-item';
+      const ki = document.createElement('input'); ki.type='text'; ki.value=row[ci*2]||''; ki.placeholder=`항목 ${ci+1}`; ki.addEventListener('input',e=>{row[ci*2]=e.target.value;scheduleRender();});
+      const vi = document.createElement('input'); vi.type='text'; vi.value=row[ci*2+1]||''; vi.placeholder='값'; vi.addEventListener('input',e=>{row[ci*2+1]=e.target.value;scheduleRender();});
+      pair.appendChild(ki); pair.appendChild(vi);
+      rowEl.appendChild(pair);
+    }
+    wrap.appendChild(rowEl);
+  });
+}
+function addIbRow() { state.infobox.rows.push(['항목','','항목','','','']); renderIbRows();scheduleRender(); }
+function deleteIbRow(ri) { state.infobox.rows.splice(ri,1); renderIbRows();scheduleRender(); }
+
+// ════════════════════════════════════════════════════════
+//  섹션 내용 편집기
+// ════════════════════════════════════════════════════════
+function renderSectionEditors() {
+  const wrap = document.getElementById('section-editors');
+  wrap.innerHTML = '';
+  flattenSections(state.sections).forEach(({sec,depth,numStr}) => {
+    const id = sec.id;
+    if (!state.content[id]) state.content[id]='';
+    const editor = document.createElement('div');
+    editor.className = 'section-editor';
+    const icon = depth===0?'📄':depth===1?'📎':'✦';
+    const indent = depth>0?`margin-left:${depth*10}px;`:'';
+    editor.innerHTML = `
+      <div class="section-editor-header" onclick="toggleSectionEditor('${id}',this)">
+        <span class="section-editor-title">${icon} <span style="color:var(--accent);font-size:10px;">${numStr}</span> ${escHtml(sec.title)}</span>
+        <span class="section-editor-toggle">▶</span>
+      </div>
+      <div class="section-editor-body">
+        <div class="toolbar">
+          <button class="toolbar-btn" onclick="insertFormat('${id}','bold')"><b>B</b></button>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','italic')"><i>I</i></button>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','strike')"><s>S</s></button>
+          <div class="toolbar-divider"></div>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','more')">더보기</button>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','fn')">각주</button>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','link')">링크</button>
+          <div class="toolbar-divider"></div>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','ul')">• 목록</button>
+          <button class="toolbar-btn" onclick="insertFormat('${id}','ol')">1. 목록</button>
+        </div>
+        <textarea id="content-${id}" rows="6" placeholder="내용을 입력하세요.\n\n서식 예시:\n**굵게** *기울임* ~~취소선~~\n[^레이블] → 각주 삽입\n[more]접힌 내용[/more] → 더보기"
+          oninput="state.content['${id}']=this.value;scheduleRender();"
+        >${escHtml(state.content[id])}</textarea>
+      </div>`;
+    editor.style.cssText += indent;
+    wrap.appendChild(editor);
+  });
+}
+
+function flattenSections(sections,depth=0,numBase='') {
+  const result=[];
+  sections.forEach((sec,si)=>{
+    const numStr=numBase?`${numBase}.${si+1}`:`${si+1}`;
+    result.push({sec,depth,numStr});
+    if(sec.children&&sec.children.length) flattenSections(sec.children,depth+1,numStr).forEach(r=>result.push(r));
+  });
+  return result;
+}
+
+function toggleSectionEditor(id, headerEl) {
+  const editor = headerEl.closest('.section-editor');
+  editor.classList.toggle('open');
+  editor.querySelector('.section-editor-toggle').textContent = editor.classList.contains('open')?'▼':'▶';
+}
+
+function insertFormat(sectionId,type) {
+  const ta = document.getElementById(`content-${sectionId}`);
+  if (!ta) return;
+  const start=ta.selectionStart, end=ta.selectionEnd, sel=ta.value.substring(start,end);
+  let before='',after='';
+  if(type==='bold'){before='**';after='**';}
+  if(type==='italic'){before='*';after='*';}
+  if(type==='strike'){before='~~';after='~~';}
+  if(type==='more'){before='[more]';after='[/more]';}
+  if(type==='fn'){const lbl=prompt('각주 레이블 입력:');if(!lbl)return;before=`[^${lbl}]`;after='';}
+  if(type==='link'){const url=prompt('URL 입력:');if(!url)return;ta.setRangeText(`<a href="${url}">${sel||'링크텍스트'}</a>`,start,end,'end');state.content[sectionId]=ta.value;scheduleRender();return;}
+  if(type==='ul'){ta.setRangeText(`\n- ${sel||'항목'}`,start,end,'end');state.content[sectionId]=ta.value;scheduleRender();return;}
+  if(type==='ol'){ta.setRangeText(`\n1. ${sel||'항목'}`,start,end,'end');state.content[sectionId]=ta.value;scheduleRender();return;}
+  ta.setRangeText(before+(sel||'텍스트')+after,start,end,'end');
+  state.content[sectionId]=ta.value;scheduleRender();
+}
+
+// ════════════════════════════════════════════════════════
+//  각주
+// ════════════════════════════════════════════════════════
+function renderFootnoteList() {
+  const wrap = document.getElementById('footnote-list');
+  wrap.innerHTML = '';
+  state.footnotes.forEach((fn,i)=>{
+    const item = document.createElement('div');
+    item.className = 'footnote-item';
+    item.innerHTML = `
+      <span class="footnote-num">[${i+1}]</span>
+      <input type="text" value="${escHtml(fn.label)}" placeholder="레이블" style="width:100px;flex-shrink:0;">
+      <input type="text" value="${escHtml(fn.text)}" placeholder="각주 내용">
+      <button class="toc-btn danger" onclick="deleteFootnote(${i})">✕</button>`;
+    const [,labelInput,textInput] = item.querySelectorAll('input');
+    labelInput.addEventListener('input',e=>{fn.label=e.target.value;scheduleRender();});
+    textInput.addEventListener('input',e=>{fn.text=e.target.value;scheduleRender();});
+    wrap.appendChild(item);
+  });
+}
+function addFootnote() { state.footnotes.push({label:String(state.footnotes.length+1),text:'각주 내용'}); renderFootnoteList();scheduleRender(); }
+function deleteFootnote(i) { state.footnotes.splice(i,1); renderFootnoteList();scheduleRender(); }
+
+// ════════════════════════════════════════════════════════
+//  스타일/인포박스 수집
+// ════════════════════════════════════════════════════════
+function collectStyle() {
+  const g=id=>document.getElementById(id);
+  state.style={
+    bg:g('s-bg').value, text:g('s-text').value, link:g('s-link').value,
+    textM:g('s-text-m').value, border:g('s-border').value, borderLt:g('s-border-lt').value,
+    tocBg:g('s-toc-bg').value, tocHead:g('s-toc-head').value,
+    h2Color:g('s-h2-color').value, h2Num:g('s-h2-num').value,
+    h3Color:g('s-h3-color').value, h3Num:g('s-h3-num').value,
+    fontSize:g('s-fontsize').value, lineHeight:g('s-lineheight').value,
+  };
+}
+function collectInfobox() {
+  state.infobox.charname = document.getElementById('ib-charname').value||'캐릭터 이름';
+  state.infobox.epigraphTitle = document.getElementById('epigraph-title').value;
+  state.infobox.epigraphText = document.getElementById('epigraph-text').value;
+  state.infobox.epigraphBg = document.getElementById('epigraph-bg').value;
+  state.infobox.epigraphColor = document.getElementById('epigraph-color').value;
+}
+
+// ════════════════════════════════════════════════════════
+//  마크다운 → HTML
+// ════════════════════════════════════════════════════════
+function mdToHtml(text) {
+  if(!text)return'';
+  const fnMap={};
+  state.footnotes.forEach((fn,i)=>{fnMap[fn.label]=i+1;});
+  let lines=text.split('\n'),html='',inUl=false,inOl=false,inMore=false;
+  lines.forEach(line=>{
+    if(line.includes('[more]')){
+      let inner=line.replace('[more]','').replace('[/more]','');
+      if(line.includes('[/more]')){
+        html+=`<div data-ke-type="moreLess" data-text-more="더보기" data-text-less="닫기"><a class="btn-toggle-moreless">더보기</a><div class="moreless-content"><p class="wiki-p" data-ke-size="size16">${applyInline(inner,fnMap)}</p></div></div>\n`;
+      } else {
+        html+=`<div data-ke-type="moreLess" data-text-more="더보기" data-text-less="닫기"><a class="btn-toggle-moreless">더보기</a><div class="moreless-content">\n`;
+        if(inner.trim()) html+=`<p class="wiki-p" data-ke-size="size16">${applyInline(inner,fnMap)}</p>\n`;
+        inMore=true;
+      }
+      return;
+    }
+    if(inMore&&line.includes('[/more]')){
+      let inner=line.replace('[/more]','');
+      if(inner.trim()) html+=`<p class="wiki-p" data-ke-size="size16">${applyInline(inner,fnMap)}</p>\n`;
+      html+=`</div></div>\n`; inMore=false; return;
+    }
+    if(line.match(/^- .+/)){
+      if(!inUl){html+='<ul class="namu-list">\n';inUl=true;}
+      html+=`<li>${applyInline(line.replace(/^- /,''),fnMap)}</li>\n`; return;
+    } else if(inUl){html+='</ul>\n';inUl=false;}
+    if(line.match(/^\d+\. .+/)){
+      if(!inOl){html+='<ol class="namu-list">\n';inOl=true;}
+      html+=`<li>${applyInline(line.replace(/^\d+\. /,''),fnMap)}</li>\n`; return;
+    } else if(inOl){html+='</ol>\n';inOl=false;}
+    if(line.trim()===''){if(!inMore)html+='<p class="wiki-p" data-ke-size="size16">&nbsp;</p>\n';return;}
+    html+=`<p class="wiki-p" data-ke-size="size16">${applyInline(line,fnMap)}</p>\n`;
+  });
+  if(inUl)html+='</ul>\n';
+  if(inOl)html+='</ol>\n';
+  if(inMore)html+='</div></div>\n';
+  return html;
+}
+function applyInline(text,fnMap) {
+  text=text.replace(/\[\^([^\]]+)\]/g,(_,lbl)=>`<sup class="fn" data-fn="${escAttr(lbl)}">[${escHtml(String(lbl))}]</sup>`);
+  text=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  text=text.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  text=text.replace(/~~(.+?)~~/g,'<s>$1</s>');
+  return text;
+}
+
+// ════════════════════════════════════════════════════════
+//  폰트 CSS 생성
+// ════════════════════════════════════════════════════════
+function buildFontCSS() {
+  const faceBlocks = [];
+  const importUrls = new Set();
+
+  // 각 대상별로 @font-face / @import 수집
+  Object.values(state.fonts).forEach(f => {
+    if (f.googleUrl) importUrls.add(f.googleUrl);
+    (f.customFaces || []).forEach(face => {
+      if (!face.url) return;
+      const family = f.family.replace(/['"]/g,'').split(',')[0].trim();
+      faceBlocks.push(`@font-face {
+  font-family: '${family}';
+  src: url('${face.url}') format('woff2');
+  font-weight: ${face.weight || '400'};
+  font-style: ${face.style || 'normal'};
+  font-display: swap;
+}`);
+    });
+  });
+
+  let css = '';
+  importUrls.forEach(url => { css += `@import url('${url}');\n`; });
+  css += '\n';
+  faceBlocks.forEach(b => { css += b + '\n'; });
+  return css;
+}
+
+function fontFamilyCSS(targetId, fallback='') {
+  const f = state.fonts[targetId];
+  if (!f || f.preset==='inherit' || !f.family) return fallback;
+  return f.family;
+}
+function fontSizeCSS(targetId, fallback='') {
+  const f = state.fonts[targetId];
+  if (!f || !f.size) return fallback;
+  return f.size;
+}
+function fontWeightCSS(targetId, fallback='') {
+  const f = state.fonts[targetId];
+  if (!f || !f.weight) return fallback;
+  return f.weight;
+}
+function fontStyle(targetId) {
+  const f = state.fonts[targetId];
+  if (!f || f.preset==='inherit') return '';
+  let css = '';
+  if (f.family) css += `font-family:${f.family};`;
+  if (f.size) css += `font-size:${f.size};`;
+  if (f.weight) css += `font-weight:${f.weight};`;
+  if (f.customCss) css += f.customCss.trim().replace(/\n/g,' ') + ';';
+  return css;
+}
+
+// ════════════════════════════════════════════════════════
+//  HTML 생성
+// ════════════════════════════════════════════════════════
+function generateHTML() {
+  collectStyle();
+  collectInfobox();
+  const s = state.style;
+  const ib = state.infobox;
+  const bodyFont = fontFamilyCSS('body', "'Noto Sans KR','맑은 고딕','Malgun Gothic',sans-serif");
+  const bodySize = fontSizeCSS('body', s.fontSize);
+  const bodyWeight = fontWeightCSS('body', '400');
+
+  const fontCss = buildFontCSS();
+
+  const cssVars = `
+.wiki-wrap {
+  --wk-bg:        ${s.bg};
+  --wk-bg-toc:    ${s.tocBg};
+  --wk-bg-thead:  ${s.tocHead};
+  --wk-border:    ${s.border};
+  --wk-border-lt: ${s.borderLt};
+  --wk-text:      ${s.text};
+  --wk-text-m:    ${s.textM};
+  --wk-link:      ${s.link};
+  --wk-link-new:  #cc3333;
+  font-family: ${bodyFont};
+  font-size: ${bodySize};
+  font-weight: ${bodyWeight};
+  line-height: ${s.lineHeight};
+  color: var(--wk-text);
+  background: var(--wk-bg);
+  max-width: 900px; margin: 0 auto;
+  padding: 16px 20px 48px; box-sizing: border-box;
+}
+${fontStyle('body') ? `.wiki-wrap { ${fontStyle('body')} }` : ''}
+.wiki-wrap *, .wiki-wrap *::before, .wiki-wrap *::after { box-sizing: border-box; }
+.wiki-wrap a { color: var(--wk-link); text-decoration: none; }
+.wiki-wrap a:hover { text-decoration: underline; }
+.wiki-wrap a.new { color: var(--wk-link-new); }
+
+/* H2 */
+.wiki-wrap .wiki-h2 {
+  font-size: ${fontSizeCSS('h2','20px')};
+  font-weight: ${fontWeightCSS('h2','700')};
+  ${fontFamilyCSS('h2') ? `font-family:${fontFamilyCSS('h2')};` : ''}
+  ${state.fonts.h2?.customCss || ''}
+  border-bottom: 1px solid var(--wk-border);
+  padding-bottom: 3px; margin: 24px 0 0; color: ${s.h2Color};
+  cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; user-select: none;
+}
+.wiki-wrap .wiki-h2:hover { background: #f8f9fa; }
+.wiki-wrap .wiki-h2 .hnum { font-size: calc(${fontSizeCSS('h2','20px')} * 0.8); color: ${s.h2Num}; margin-right: 4px; }
+.wiki-wrap .wiki-h2 .h2-toggle { font-size: 12px; color: #72777d; font-weight: 400; flex-shrink: 0; transition: transform .2s; }
+.wiki-wrap .wiki-h2.collapsed .h2-toggle { transform: rotate(-90deg); }
+
+/* H3 */
+.wiki-wrap .wiki-h3 {
+  font-size: ${fontSizeCSS('h3','16px')};
+  font-weight: ${fontWeightCSS('h3','700')};
+  ${fontFamilyCSS('h3') ? `font-family:${fontFamilyCSS('h3')};` : ''}
+  ${state.fonts.h3?.customCss || ''}
+  border-bottom: 1px solid var(--wk-border-lt); padding-bottom: 2px; margin: 18px 0 8px; color: ${s.h3Color};
+}
+.wiki-wrap .wiki-h3 .hnum { font-size: calc(${fontSizeCSS('h3','16px')} * 0.8); color: ${s.h3Num}; margin-right: 3px; }
+
+/* H4 */
+.wiki-wrap .wiki-h4 {
+  font-size: ${fontSizeCSS('h4','14px')};
+  font-weight: ${fontWeightCSS('h4','700')};
+  ${fontFamilyCSS('h4') ? `font-family:${fontFamilyCSS('h4')};` : ''}
+  ${state.fonts.h4?.customCss || ''}
+  margin: 14px 0 6px; color: ${s.h3Color};
+}
+.wiki-wrap .wiki-h4 .hnum { font-size: calc(${fontSizeCSS('h4','14px')} * 0.85); color: ${s.h3Num}; margin-right: 3px; }
+
+.wiki-wrap .section-body { margin-top: 10px; overflow: hidden; transition: max-height .25s ease, opacity .2s ease; max-height: 9999px; opacity: 1; }
+.wiki-wrap .section-body.collapsed { max-height: 0 !important; opacity: 0; }
+.wiki-wrap .wiki-p { margin: 0 0 10px; word-break: keep-all; overflow-wrap: break-word; }
+.wiki-wrap .wiki-p:last-child { margin-bottom: 0; }
+.wiki-wrap ul.namu-list, .wiki-wrap ol.namu-list { padding-left: 24px; margin: 6px 0 10px; }
+.wiki-wrap ul.namu-list li, .wiki-wrap ol.namu-list li { margin: 3px 0; }
+
+/* 각주 마크 */
+.wiki-wrap sup.fn { font-size: 11px; color: var(--wk-link); cursor: pointer; vertical-align: super; line-height: 0; border-bottom: 1px dotted var(--wk-link); }
+.wiki-wrap sup.fn:hover { color: #1a4a99; }
+
+/* 말풍선 툴팁 */
+#wk-fn-tooltip {
+  display: none; position: fixed;
+  background: #fff; border: 1px solid var(--wk-border, #a2a9b1); border-radius: 8px;
+  padding: 10px 14px;
+  font-size: ${fontSizeCSS('tooltip','13px')};
+  ${fontFamilyCSS('tooltip') ? `font-family:${fontFamilyCSS('tooltip')};` : `font-family:${bodyFont};`}
+  ${fontWeightCSS('tooltip') !== '400' ? `font-weight:${fontWeightCSS('tooltip')};` : ''}
+  ${state.fonts.tooltip?.customCss || ''}
+  color: ${s.text}; line-height: 1.6;
+  width: max-content; max-width: min(480px, 90vw);
+  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  z-index: 2147483647; pointer-events: none;
+}
+#wk-fn-tooltip.visible { display: block; }
+#wk-fn-tooltip::after, #wk-fn-tooltip::before { content:''; position:absolute; left:var(--wk-arr,50%); border:7px solid transparent; }
+#wk-fn-tooltip.arr-down::after  { top:100%; border-top-color:#a2a9b1; }
+#wk-fn-tooltip.arr-down::before { top:calc(100% - 1px); border-top-color:#fff; z-index:1; }
+#wk-fn-tooltip.arr-up::after    { bottom:100%; border-bottom-color:#a2a9b1; }
+#wk-fn-tooltip.arr-up::before   { bottom:calc(100% - 1px); border-bottom-color:#fff; z-index:1; }
+
+/* 각주 섹션 */
+.wiki-wrap .footnote-section {
+  border-top: 1px solid var(--wk-border-lt); margin-top: 4px; padding-top: 10px;
+  font-size: ${fontSizeCSS('footnote','12.5px')};
+  ${fontFamilyCSS('footnote') ? `font-family:${fontFamilyCSS('footnote')};` : ''}
+  ${state.fonts.footnote?.customCss || ''}
+  color: #72777d;
+}
+.wiki-wrap .footnote-section ol { padding-left: 18px; }
+.wiki-wrap .footnote-section li { margin: 2px 0; line-height: 1.6; }
+.wiki-wrap .fn-back { font-size: 11px; color: var(--wk-link); margin-right: 4px; }
+
+/* 목차 */
+.wiki-wrap .toc-box {
+  border: 1px solid var(--wk-border); background: var(--wk-bg-toc);
+  display: inline-block; max-width: 100%; margin: 0 0 16px;
+  font-size: ${fontSizeCSS('toc','13.5px')};
+  ${fontFamilyCSS('toc') ? `font-family:${fontFamilyCSS('toc')};` : ''}
+  ${state.fonts.toc?.customCss || ''}
+}
+.wiki-wrap .toc-header { background: var(--wk-bg-thead); border-bottom: 1px solid var(--wk-border); padding: 5px 12px; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: space-between; }
+.wiki-wrap .toc-toggle-btn { font-size: 11px; color: var(--wk-link); cursor: pointer; font-weight: 400; background: none; border: none; font-family: inherit; padding: 0; }
+.wiki-wrap .toc-inner { padding: 8px 14px 10px; min-width: 180px; }
+.wiki-wrap .toc-inner ol, .wiki-wrap .toc-inner ol li { list-style: none !important; }
+.wiki-wrap .toc-inner ol { padding: 0 !important; margin: 0 !important; }
+.wiki-wrap .toc-inner > ol > li { margin: 4px 0; line-height: 1.6; }
+.wiki-wrap .toc-inner > ol > li > ol { padding-left: 14px !important; margin-top: 2px !important; }
+.wiki-wrap .toc-inner > ol > li > ol > li { margin: 2px 0; font-size: 13px; }
+.wiki-wrap .toc-inner > ol > li > ol > li > ol { padding-left: 14px !important; margin-top: 2px !important; }
+.wiki-wrap .toc-inner > ol > li > ol > li > ol > li { margin: 2px 0; font-size: 12px; }
+.wiki-wrap .toc-inner .toc-num { font-weight: 700; color: ${s.text}; margin-right: 3px; }
+.wiki-wrap .toc-inner .toc-num-sub { color: #72777d; font-size: 12px; margin-right: 3px; }
+.wiki-wrap .toc-inner .toc-num-sub2 { color: #999; font-size: 11px; margin-right: 3px; }
+.wiki-wrap .toc-inner a { color: var(--wk-link); text-decoration: none; }
+.wiki-wrap .toc-inner a:hover { text-decoration: underline; }
+.wiki-wrap .toc-inner > ol > li.toc-collapsed > a { color: #72777d; text-decoration: line-through; }
+
+/* 인포박스 */
+.wiki-wrap table {
+  ${fontFamilyCSS('infobox') ? `font-family:${fontFamilyCSS('infobox')};` : ''}
+  ${state.fonts.infobox?.customCss || ''}
+}
+
+/* 더보기 */
+[data-ke-type="moreLess"] .moreless-content { display: none; margin-top: 8px; }
+[data-ke-type="moreLess"] .btn-toggle-moreless { color: var(--wk-link, #3366cc); cursor: pointer; font-size: 12px; text-decoration: underline; }
+`;
+
+  // ── 에피그라프 ──
+  const epigraph = ib.epigraphText ? `
+<h4 style="position:relative;margin:2em 0;background-color:#efefef;text-align:center;" data-ke-size="size20">
+  <span style="position:absolute;left:50%;top:0;padding:10px 20px;transform:translate(-50%,-50%);background-color:${ib.epigraphColor};font-weight:bold;color:#fff;border-radius:50px;">&nbsp;${escHtml(ib.epigraphTitle||'')}&nbsp;</span>
+</h4>
+<div style="width:70%;padding:2em 1.5em;margin:0 auto;background:${ib.epigraphBg};border-radius:2em;">
+  <p style="text-align:center;" data-ke-size="size16"><span style="font-size:2em;font-weight:800;color:${ib.epigraphColor};">${escHtml(ib.epigraphText)}</span></p>
+</div>
+<div style="width:0;border:22px solid transparent;border-top-color:${ib.epigraphBg};border-left:0;margin-left:60%;margin-top:0;margin-bottom:1em;">&nbsp;</div>
+` : '';
+
+  // ── 인포박스 ──
+  const tableRows = state.infobox.rows.map(row=>{
+    const cells=[];
+    for(let c=0;c<3;c++){
+      const key=row[c*2]||'', val=row[c*2+1]||'&nbsp;';
+      if(key){
+        cells.push(`<td style="width:16.6667%;text-align:center;">${escHtml(key)}</td>`);
+        cells.push(`<td style="width:16.6667%;text-align:center;">${escHtml(val)}</td>`);
+      }
+    }
+    return `<tr>${cells.join('')}</tr>`;
+  }).join('\n');
+
+  const infoboxTable = `<table style="border-collapse:collapse;width:100%;" border="1">
+<tbody>
+<tr><td style="width:100%;text-align:center;" colspan="6">${escHtml(ib.charname)}</td></tr>
+${tableRows}
+</tbody>
+</table>`;
+
+  // ── 목차 ──
+  function buildTocHtml(sections,depth=0,numBase='') {
+    let h='<ol>\n';
+    sections.forEach((sec,si)=>{
+      const num=numBase?`${numBase}.${si+1}`:`${si+1}`;
+      const nc=depth===0?'toc-num':depth===1?'toc-num-sub':'toc-num-sub2';
+      const liId=depth===0?` id="toc-li-${sec.id}"`:'';
+      h+=`<li${liId}><a href="#" data-target="wk-${sec.id}"><span class="${nc}">${num}.</span> ${escHtml(sec.title)}</a>`;
+      if(sec.children&&sec.children.length) h+='\n'+buildTocHtml(sec.children,depth+1,num);
+      h+=`</li>\n`;
+    });
+    h+='</ol>\n'; return h;
+  }
+  const tocHtml = `<div id="wk-toc" class="toc-box">
+<div class="toc-header">목차 <button id="wk-toc-btn" class="toc-toggle-btn">숨기기</button></div>
+<div id="wk-toc-inner" class="toc-inner">
+${buildTocHtml(state.sections)}
+</div>
+</div>`;
+
+  // ── 섹션 본문 ──
+  function buildSectionsHtml(sections,depth=0,numBase='') {
+    let h='';
+    sections.forEach((sec,si)=>{
+      const num=numBase?`${numBase}.${si+1}`:`${si+1}`;
+      const content=mdToHtml(state.content[sec.id]||'내용을 입력하세요.');
+      const hasCh=sec.children&&sec.children.length>0;
+      if(depth===0){
+        h+=`<!-- ${num}. ${sec.title} -->\n`;
+        h+=`<h2 id="wk-${sec.id}" class="wiki-h2" data-sec="${sec.id}" data-ke-size="size26"><span><span class="hnum">${num}.</span> ${escHtml(sec.title)}</span><span class="h2-toggle">▼</span></h2>\n`;
+        h+=`<div id="body-${sec.id}" class="section-body">\n`;
+        h+=hasCh?buildSectionsHtml(sec.children,1,num):content;
+        h+=`</div>\n`;
+      } else if(depth===1){
+        h+=`<h3 id="wk-${sec.id}" class="wiki-h3" data-ke-size="size23"><span class="hnum">${num}.</span> ${escHtml(sec.title)}</h3>\n`;
+        h+=hasCh?buildSectionsHtml(sec.children,2,num):content;
+      } else {
+        h+=`<h4 id="wk-${sec.id}" class="wiki-h4"><span class="hnum">${num}.</span> ${escHtml(sec.title)}</h4>\n`;
+        h+=content;
+      }
+    });
+    return h;
+  }
+  const sectionsHtml = buildSectionsHtml(state.sections);
+
+  // ── 각주 섹션 ──
+  const fnHtml = state.footnotes.length>0?`
+<div class="footnote-section">
+<ol>
+${state.footnotes.map((fn,i)=>`<li id="wk-fn${escAttr(fn.label)}"><span class="fn-back">↑</span>${escHtml(fn.text)}</li>`).join('\n')}
+</ol>
+</div>`:'';
+
+  // ── JS ──
+  const js = `
+(function(){
+  var tocBtn=document.getElementById('wk-toc-btn'),tocInner=document.getElementById('wk-toc-inner');
+  if(tocBtn&&tocInner){
+    tocBtn.addEventListener('click',function(e){
+      e.stopPropagation();
+      var h=tocInner.style.display==='none';
+      tocInner.style.display=h?'':'none';
+      tocBtn.textContent=h?'숨기기':'보이기';
+    });
+  }
+  document.querySelectorAll('.wiki-wrap .toc-inner a[data-target]').forEach(function(a){
+    a.addEventListener('click',function(e){
+      e.preventDefault();
+      var t=document.getElementById(a.getAttribute('data-target'));
+      if(!t)return;
+      var b=null,p=t.parentNode;
+      while(p){if(p.classList&&p.classList.contains('section-body')){b=p;break;}p=p.parentNode;}
+      if(b&&b.classList.contains('collapsed')){
+        b.classList.remove('collapsed');
+        var sec=b.id.replace('body-','');
+        var h2=document.querySelector('.wiki-wrap .wiki-h2[data-sec="'+sec+'"]');
+        var li=document.getElementById('toc-li-'+sec);
+        if(h2)h2.classList.remove('collapsed');
+        if(li)li.classList.remove('toc-collapsed');
+      }
+      setTimeout(function(){t.scrollIntoView({behavior:'smooth',block:'start'});},280);
+    });
+  });
+  document.querySelectorAll('.wiki-wrap .wiki-h2[data-sec]').forEach(function(h){
+    var sec=h.getAttribute('data-sec'),body=document.getElementById('body-'+sec),li=document.getElementById('toc-li-'+sec);
+    if(!body)return;
+    h.addEventListener('click',function(){body.classList.toggle('collapsed');h.classList.toggle('collapsed');if(li)li.classList.toggle('toc-collapsed');});
+  });
+  var tip=document.getElementById('wk-fn-tooltip');
+  if(!tip)return;
+  var fnMap={};
+  document.querySelectorAll('.wiki-wrap .footnote-section li[id^="wk-fn"]').forEach(function(li){
+    fnMap[li.id.replace('wk-fn','')]=li.textContent.replace(/^\\s*↑\\s*/,'').trim();
+  });
+  function showTip(sup){
+    var num=sup.getAttribute('data-fn'),txt=fnMap[num];
+    if(!txt)return;
+    tip.textContent='['+num+'] '+txt;
+    tip.className='visible';
+    tip.style.left='-9999px';tip.style.top='-9999px';
+    var sr=sup.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight,vp={w:window.innerWidth,h:window.innerHeight};
+    var left=sr.left+sr.width/2-tw/2;
+    left=Math.max(8,Math.min(left,vp.w-tw-8));
+    var above=sr.top-10-th,below=sr.bottom+10,top,dir;
+    if(above>=8){top=above;dir='arr-down';}else{top=below;dir='arr-up';}
+    top=Math.max(8,Math.min(top,vp.h-th-8));
+    tip.style.left=left+'px';tip.style.top=top+'px';
+    tip.className='visible '+dir;
+    var arrX=Math.round(sr.left+sr.width/2-left);
+    arrX=Math.max(12,Math.min(arrX,tw-12));
+    tip.style.setProperty('--wk-arr',arrX+'px');
+  }
+  document.querySelectorAll('.wiki-wrap sup.fn').forEach(function(sup){
+    sup.addEventListener('mouseenter',function(){showTip(sup);});
+    sup.addEventListener('mouseleave',function(){tip.className='';});
+    sup.addEventListener('click',function(e){e.stopPropagation();tip.className===''?showTip(sup):(tip.className='');});
+  });
+  document.addEventListener('click',function(){if(tip)tip.className='';});
+  document.querySelectorAll('[data-ke-type="moreLess"]').forEach(function(el){
+    var btn=el.querySelector('.btn-toggle-moreless'),content=el.querySelector('.moreless-content');
+    if(!btn||!content)return;
+    var m=el.getAttribute('data-text-more')||'더보기',l=el.getAttribute('data-text-less')||'닫기';
+    btn.textContent=m;
+    btn.addEventListener('click',function(){var o=content.style.display==='block';content.style.display=o?'none':'block';btn.textContent=o?m:l;});
+  });
+})();
+`;
+
+  return `<!-- 폰트 -->
+<div><style>
+${fontCss.trim()}
+</style></div>
+
+<!-- CSS -->
+<div><style>
+${cssVars.trim()}
+</style></div>
+
+<div class="wiki-wrap">
+
+${epigraph}
+${infoboxTable}
+
+<p data-ke-size="size16">&nbsp;</p>
+
+${tocHtml}
+
+${sectionsHtml}
+
+${fnHtml}
+
+</div>
+<div id="wk-fn-tooltip"></div>
+<script>
+${js.trim()}
+<\/script>`;
+}
+
+// ════════════════════════════════════════════════════════
+//  렌더링
+// ════════════════════════════════════════════════════════
+function scheduleRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(doRender, 300);
+}
+
+function doRender() {
+  const html = generateHTML();
+  const frame = document.getElementById('preview-frame');
+  const doc = frame.contentDocument || frame.contentWindow.document;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html lang="ko"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+  </head><body style="margin:0;padding:12px;">${html}</body></html>`);
+  doc.close();
+  const codeEl = document.getElementById('code-output');
+  if (codeEl) codeEl.value = html;
+}
+
+function toggleCode() { document.getElementById('code-panel').classList.toggle('open'); }
+function copyCode() {
+  const html=generateHTML();
+  navigator.clipboard.writeText(html).then(()=>showToast('HTML 코드가 복사되었습니다!')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=html;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('복사 완료!');
+  });
+}
+function downloadCode() {
+  const html=generateHTML();
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='profile.html';a.click();
+  URL.revokeObjectURL(url);showToast('다운로드 시작!');
+}
+function showToast(msg) {
+  const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escAttr(s) { return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// ── 초기화 ──
+document.getElementById('ib-charname').value = '키에르 디트-마루크 Cheir Djt-Marouc';
+document.getElementById('epigraph-title').value = 'ἐπίφορος';
+document.getElementById('epigraph-text').value = '앞장서겠습니다.';
+renderTocList();
+renderIbRows();
+renderFontPanel('body');
+doRender();
+</script>
+</body>
+</html>
