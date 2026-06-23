@@ -254,14 +254,40 @@
 
     <!-- ════ 폰트 탭 ════ -->
     <div id="tab-font" class="tab-content">
-      <div class="hint" style="margin-bottom:12px;">영역별로 서로 다른 폰트를 적용할 수 있습니다. @font-face 웹폰트를 직접 등록하거나 Google Fonts / CDN URL을 사용하세요.</div>
 
-      <!-- 대상 선택 탭 -->
+      <!-- ① 웹폰트 등록 -->
+      <div class="section-title" style="margin-top:0;">웹폰트 등록</div>
+      <div class="hint" style="margin-bottom:8px;">
+        @font-face 코드 또는 Google Fonts <code style="font-family:monospace;font-size:10px;background:rgba(255,255,255,.1);padding:0 3px;border-radius:3px;">@import url(...)</code> 를 붙여넣고 추가 버튼을 누르세요.<br>
+        등록된 폰트는 아래 영역별 선택지에 자동으로 추가됩니다.
+      </div>
+      <textarea id="font-face-input" rows="6" placeholder="@font-face {
+    font-family: 'YeogiOttaeJalnan';
+    src: url('https://...') format('woff');
+    font-weight: normal;
+    font-display: swap;
+}
+
+또는
+
+@import url('https://fonts.googleapis.com/css2?family=...');" style="font-family:monospace;font-size:11px;"></textarea>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+        <button class="btn btn-primary" style="font-size:12px;padding:6px 16px;" onclick="registerCustomFont()">＋ 폰트 추가</button>
+        <span id="font-reg-status" style="font-size:11px;"></span>
+      </div>
+
+      <!-- 등록된 커스텀 폰트 목록 -->
+      <div id="custom-font-list" style="margin-top:10px;"></div>
+
+      <div class="section-title" style="margin-top:16px;">영역별 폰트 적용</div>
+      <div class="hint" style="margin-bottom:10px;">영역을 선택하고 폰트·크기·굵기를 설정하세요.</div>
+
+      <!-- ② 대상 선택 탭 -->
       <div class="font-target-tabs" id="font-target-tabs">
         <div class="font-target-tab active" data-target="body" onclick="switchFontTarget('body')">본문 전체</div>
-        <div class="font-target-tab" data-target="h2" onclick="switchFontTarget('h2')">대제목 (H2)</div>
-        <div class="font-target-tab" data-target="h3" onclick="switchFontTarget('h3')">소제목 (H3)</div>
-        <div class="font-target-tab" data-target="h4" onclick="switchFontTarget('h4')">세부제목 (H4)</div>
+        <div class="font-target-tab" data-target="h2" onclick="switchFontTarget('h2')">대제목 H2</div>
+        <div class="font-target-tab" data-target="h3" onclick="switchFontTarget('h3')">소제목 H3</div>
+        <div class="font-target-tab" data-target="h4" onclick="switchFontTarget('h4')">세부 H4</div>
         <div class="font-target-tab" data-target="toc" onclick="switchFontTarget('toc')">목차</div>
         <div class="font-target-tab" data-target="infobox" onclick="switchFontTarget('infobox')">인포박스</div>
         <div class="font-target-tab" data-target="footnote" onclick="switchFontTarget('footnote')">각주</div>
@@ -270,7 +296,7 @@
         <div class="font-target-tab" data-target="epi-quote" onclick="switchFontTarget('epi-quote')">에피 한마디</div>
       </div>
 
-      <!-- 대상별 패널 (JS로 렌더링) -->
+      <!-- ③ 대상별 패널 -->
       <div id="font-target-panel"></div>
     </div>
 
@@ -313,7 +339,7 @@
       <div style="margin-left:auto;display:flex;gap:8px;"><span class="chip">↕ 스크롤 가능</span></div>
     </div>
     <div class="preview-frame-wrap">
-      <iframe id="preview-frame" sandbox="allow-scripts allow-same-origin"></iframe>
+      <iframe id="preview-frame" style="width:100%;height:100%;border:none;background:white;"></iframe>
     </div>
     <div class="code-panel" id="code-panel">
       <div class="code-panel-header">
@@ -488,7 +514,7 @@ let state = {
   // 폰트 설정: 대상별
   fonts: {
     // body: { preset, family, size, weight, customFaces:[], googleUrl, customCss }
-    body:      { preset:'Pretendard', family:'Pretendard', size:'', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
+    body:      { preset:'Pretendard', family:"'Pretendard', sans-serif", size:'', weight:'400', customFaces:[], googleUrl:'', customCss:'' },
     h2:        { preset:'inherit', family:'', size:'20px', weight:'700', customFaces:[], googleUrl:'', customCss:'' },
     h3:        { preset:'inherit', family:'', size:'16px', weight:'700', customFaces:[], googleUrl:'', customCss:'' },
     h4:        { preset:'inherit', family:'', size:'14px', weight:'700', customFaces:[], googleUrl:'', customCss:'' },
@@ -521,7 +547,114 @@ function switchTab(id) {
 }
 
 // ════════════════════════════════════════════════════════
-//  폰트 탭 렌더링
+//  폰트 탭 — 커스텀 폰트 등록
+// ════════════════════════════════════════════════════════
+
+// 사용자가 등록한 커스텀 폰트 목록 (state와 별도로 전역 관리)
+// { name, rawCss, type: 'font-face'|'import' }
+let customFonts = [];
+
+function registerCustomFont() {
+  const input = document.getElementById('font-face-input');
+  const status = document.getElementById('font-reg-status');
+  const raw = (input.value || '').trim();
+  if (!raw) { setFontStatus('코드를 입력해 주세요.', 'err'); return; }
+
+  // @import url(...) 형태
+  if (raw.startsWith('@import')) {
+    const urlMatch = raw.match(/url\(['"]?([^'")\s]+)['"]?\)/);
+    // font-family 이름 추출 시도 (family= 파라미터)
+    let name = '';
+    if (urlMatch) {
+      const famMatch = urlMatch[1].match(/family=([^&:]+)/);
+      if (famMatch) name = decodeURIComponent(famMatch[1].split(':')[0].replace(/\+/g,' '));
+    }
+    if (!name) name = prompt('폰트 이름을 입력해 주세요 (font-family에 사용할 이름):');
+    if (!name) return;
+    name = name.trim();
+    addCustomFontEntry(name, raw, 'import');
+    return;
+  }
+
+  // @font-face { ... } 하나 이상 파싱
+  const blocks = raw.match(/@font-face\s*\{[^}]+\}/gi);
+  if (!blocks) { setFontStatus('⚠ @font-face 블록을 찾을 수 없습니다.', 'err'); return; }
+
+  // font-family 이름 추출 (첫 번째 블록에서)
+  const famMatch = blocks[0].match(/font-family\s*:\s*['"]?([^'";]+)['"]?\s*;/i);
+  if (!famMatch) { setFontStatus('⚠ font-family를 찾을 수 없습니다.', 'err'); return; }
+  const name = famMatch[1].trim();
+
+  // 이미 등록됐으면 덮어쓰기 확인
+  const existing = customFonts.findIndex(f => f.name === name);
+  if (existing !== -1) {
+    customFonts[existing].rawCss = raw;
+    customFonts[existing].type = 'font-face';
+  } else {
+    addCustomFontEntry(name, raw, 'font-face');
+  }
+}
+
+function addCustomFontEntry(name, rawCss, type) {
+  // FONT_PRESETS에 동적 추가
+  FONT_PRESETS[name] = {
+    label: name,
+    import: type === 'import' ? rawCss.replace(/^@import\s+url\(['"]?|['"]?\)\s*;?$/g, '') : null,
+    faces: [],
+    rawCss: rawCss,
+    custom: true,
+  };
+  // customFonts 목록에도 추가
+  const existing = customFonts.findIndex(f => f.name === name);
+  if (existing !== -1) customFonts[existing] = { name, rawCss, type };
+  else customFonts.push({ name, rawCss, type });
+
+  setFontStatus(`✓ "${name}" 등록 완료!`, 'ok');
+  document.getElementById('font-face-input').value = '';
+  renderCustomFontList();
+  renderFontPanel(currentFontTarget); // 선택지 갱신
+  scheduleRender();
+}
+
+function setFontStatus(msg, cls) {
+  const el = document.getElementById('font-reg-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = cls === 'ok' ? 'var(--success)' : 'var(--accent)';
+  if (cls === 'ok') setTimeout(() => { el.textContent = ''; }, 3000);
+}
+
+function renderCustomFontList() {
+  const el = document.getElementById('custom-font-list');
+  if (!el) return;
+  if (customFonts.length === 0) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div style="font-size:10px;color:var(--text-m);margin-bottom:6px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">등록된 커스텀 폰트</div>`;
+  customFonts.forEach((f, i) => {
+    const chip = document.createElement('div');
+    chip.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;margin-bottom:4px;';
+    chip.innerHTML = `
+      <span style="font-size:12px;flex:1;color:var(--text);">🔤 ${escHtml(f.name)}</span>
+      <span style="font-size:10px;color:var(--text-m);">${f.type === 'import' ? 'Google Fonts' : '@font-face'}</span>
+      <button class="toc-btn danger" onclick="removeCustomFont(${i})" title="삭제">✕</button>`;
+    el.appendChild(chip);
+  });
+}
+
+function removeCustomFont(i) {
+  const name = customFonts[i].name;
+  customFonts.splice(i, 1);
+  delete FONT_PRESETS[name];
+  // 해당 폰트를 쓰던 영역 초기화
+  Object.values(state.fonts).forEach(f => {
+    if (f.preset === name) { f.preset = 'inherit'; f.family = ''; f.customFaces = []; f.googleUrl = ''; }
+  });
+  renderCustomFontList();
+  renderFontPanel(currentFontTarget);
+  scheduleRender();
+}
+
+// ════════════════════════════════════════════════════════
+//  폰트 탭 — 영역별 패널
 // ════════════════════════════════════════════════════════
 function switchFontTarget(id) {
   currentFontTarget = id;
@@ -533,170 +666,102 @@ function switchFontTarget(id) {
 
 function renderFontPanel(targetId) {
   const panel = document.getElementById('font-target-panel');
+  if (!panel) return;
   const target = FONT_TARGETS.find(t=>t.id===targetId);
+  if (!target) return;
   const f = state.fonts[targetId];
+  if (!f) return;
 
+  // 프리셋 선택지: inherit + 빌트인 + 커스텀
   const presetOpts = ['inherit', ...Object.keys(FONT_PRESETS)].map(k => {
-    const lbl = k==='inherit' ? '— 상속 (부모 폰트 따름)' : (FONT_PRESETS[k]?.label || k);
-    return `<option value="${k}" ${f.preset===k?'selected':''}>${lbl}</option>`;
+    const lbl = k === 'inherit' ? '— 상속 (부모 폰트 따름)' : (FONT_PRESETS[k]?.label || k);
+    const isCust = FONT_PRESETS[k]?.custom ? ' ★' : '';
+    return `<option value="${k}" ${f.preset===k?'selected':''}>${lbl}${isCust}</option>`;
   }).join('');
 
+  const weightOpts = ['100','200','300','400','500','600','700','800','900']
+    .map(w=>`<option ${f.weight===w?'selected':''}>${w}</option>`).join('');
+
   panel.innerHTML = `
-    <div class="font-slot">
-      <div class="font-slot-header">
-        <span class="font-slot-label">● ${target.label}</span>
-      </div>
-      <div class="hint" style="margin-bottom:10px;">${target.desc}</div>
+    <div style="background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-top:8px;">
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;">● ${target.label}</div>
+      <div style="font-size:10px;color:var(--text-m);margin-bottom:10px;">${target.desc}</div>
 
       <div class="form-group">
-        <label>프리셋 폰트 선택</label>
+        <label>폰트 선택</label>
         <select id="fp-preset" onchange="onPresetChange('${targetId}',this.value)">
           ${presetOpts}
         </select>
       </div>
 
-      <div id="fp-preset-detail"></div>
-
-      <div class="form-group">
-        <label>font-family 직접 입력 <span style="color:var(--text-m);font-weight:400;">(프리셋 적용 시 자동 입력됨)</span></label>
-        <input type="text" id="fp-family" value="${escHtml(f.family)}" placeholder="예) 'Pretendard', sans-serif"
-          oninput="state.fonts['${targetId}'].family=this.value;scheduleRender();">
-      </div>
-
-      <div class="row2" style="margin-bottom:12px;">
+      <div class="row2" style="margin-bottom:10px;">
         <div class="form-group" style="margin:0;">
           <label>font-size</label>
-          <input type="text" id="fp-size" value="${escHtml(f.size)}" placeholder="예) 14px, 1em"
+          <input type="text" id="fp-size" value="${escHtml(f.size)}" placeholder="예) 14px"
             oninput="state.fonts['${targetId}'].size=this.value;scheduleRender();">
         </div>
         <div class="form-group" style="margin:0;">
           <label>font-weight</label>
           <select id="fp-weight" onchange="state.fonts['${targetId}'].weight=this.value;scheduleRender();">
-            ${['100','200','300','400','500','600','700','800','900'].map(w=>`<option ${f.weight===w?'selected':''}>${w}</option>`).join('')}
+            ${weightOpts}
           </select>
         </div>
       </div>
 
-      <!-- Google Fonts URL 직접 입력 -->
       <div class="form-group">
-        <label>Google Fonts / CDN @import URL <span style="color:var(--text-m);font-weight:400;">(선택)</span></label>
-        <input type="text" id="fp-gurl" value="${escHtml(f.googleUrl)}" placeholder="https://fonts.googleapis.com/css2?family=..."
-          oninput="state.fonts['${targetId}'].googleUrl=this.value;scheduleRender();">
+        <label>추가 CSS <span style="color:var(--text-m);font-weight:400;">(이 영역에만 적용)</span></label>
+        <input type="text" id="fp-custom-css" value="${escHtml(f.customCss||'')}" placeholder="예) letter-spacing:-0.02em;"
+          oninput="state.fonts['${targetId}'].customCss=this.value;scheduleRender();">
       </div>
 
-      <!-- @font-face 커스텀 -->
-      <div class="section-title" style="margin-top:14px;">@font-face 직접 등록</div>
-      <div class="hint" style="margin-bottom:8px;">woff2 URL과 weight를 입력하면 @font-face를 자동 생성합니다. 프리셋 적용 시 자동으로 채워집니다.</div>
-      <div id="fp-faces-list"></div>
-      <button class="add-wf-btn" onclick="addFontFace('${targetId}')">＋ @font-face 행 추가</button>
-
-      <!-- 커스텀 CSS -->
-      <div class="section-title" style="margin-top:14px;">추가 CSS <span style="color:var(--text-m);font-size:10px;font-weight:400;">(이 요소에만 적용)</span></div>
-      <textarea id="fp-custom-css" rows="3" placeholder="예) letter-spacing: -0.02em; text-shadow: none;"
-        oninput="state.fonts['${targetId}'].customCss=this.value;scheduleRender();"
-      >${escHtml(f.customCss)}</textarea>
-
-      <div class="font-preview-text" id="fp-preview">미리보기: 가나다라마바사 The quick brown fox jumps over the lazy dog</div>
+      <div id="fp-preview" style="font-size:12px;color:var(--text-m);margin-top:6px;padding:8px;background:var(--bg);border-radius:4px;">
+        미리보기: 가나다라마바사 The quick brown fox
+      </div>
     </div>
   `;
 
-  renderFontFacesList(targetId);
   updateFontPreview(targetId);
-  // 프리셋에 따른 detail 렌더
-  renderPresetDetail(targetId, f.preset);
-}
-
-function renderPresetDetail(targetId, preset) {
-  const el = document.getElementById('fp-preset-detail');
-  if (!el) return;
-  const f = state.fonts[targetId];
-  if (preset === 'inherit' || !FONT_PRESETS[preset]) { el.innerHTML = ''; return; }
-  const p = FONT_PRESETS[preset];
-  if (p.import) {
-    el.innerHTML = `<div class="hint" style="margin-bottom:8px;">✓ Google Fonts URL: <code style="font-size:10px;color:#aef;word-break:break-all;">${p.import}</code></div>`;
-  } else if (p.faces.length) {
-    el.innerHTML = `<div class="hint" style="margin-bottom:8px;">✓ @font-face CDN ${p.faces.length}개 웨이트가 자동 등록됩니다.</div>`;
-  }
 }
 
 function onPresetChange(targetId, preset) {
   const f = state.fonts[targetId];
   f.preset = preset;
+
   if (preset === 'inherit') {
     f.family = ''; f.googleUrl = ''; f.customFaces = [];
-    document.getElementById('fp-family').value = '';
-    document.getElementById('fp-gurl').value = '';
   } else if (FONT_PRESETS[preset]) {
     const p = FONT_PRESETS[preset];
-    // family 이름 세팅
+
+    // font-family 값 세팅
     if (preset === '시스템') {
       f.family = "'맑은 고딕','Malgun Gothic',sans-serif";
     } else {
       f.family = `'${preset}', sans-serif`;
     }
-    document.getElementById('fp-family').value = f.family;
 
-    if (p.import) {
+    // 커스텀(@font-face 등록) 폰트: family만 세팅, CSS는 customFonts에서 직접 출력
+    f.googleUrl  = '';
+    f.customFaces = [];
+    // 빌트인 Google Fonts 프리셋이면 googleUrl 채워두기 (buildFontCSS 경로2 보완용)
+    if (p.import && !p.custom) {
       f.googleUrl = p.import;
-      document.getElementById('fp-gurl').value = p.import;
-      f.customFaces = [];
-    } else if (p.faces.length) {
-      f.googleUrl = '';
-      document.getElementById('fp-gurl').value = '';
-      f.customFaces = p.faces.map(face => ({ weight: face.weight, url: face.url, style: 'normal' }));
     }
   }
-  renderPresetDetail(targetId, preset);
-  renderFontFacesList(targetId);
+
   updateFontPreview(targetId);
   scheduleRender();
-}
-
-function renderFontFacesList(targetId) {
-  const f = state.fonts[targetId];
-  const el = document.getElementById('fp-faces-list');
-  if (!el) return;
-  el.innerHTML = '';
-  (f.customFaces || []).forEach((face, i) => {
-    const row = document.createElement('div');
-    row.className = 'wf-item';
-    row.innerHTML = `
-      <div style="display:grid;grid-template-columns:70px 1fr 70px 20px;gap:5px;align-items:center;">
-        <select style="font-size:11px;" onchange="state.fonts['${targetId}'].customFaces[${i}].weight=this.value;scheduleRender();">
-          ${['100','200','300','400','500','600','700','800','900'].map(w=>`<option ${face.weight===w?'selected':''}>${w}</option>`).join('')}
-        </select>
-        <input type="text" value="${escHtml(face.url)}" placeholder="woff2 URL"
-          style="font-size:11px;"
-          oninput="state.fonts['${targetId}'].customFaces[${i}].url=this.value;scheduleRender();">
-        <select style="font-size:11px;" onchange="state.fonts['${targetId}'].customFaces[${i}].style=this.value;scheduleRender();">
-          <option ${(face.style||'normal')==='normal'?'selected':''}>normal</option>
-          <option ${face.style==='italic'?'selected':''}>italic</option>
-        </select>
-        <button class="toc-btn danger" onclick="state.fonts['${targetId}'].customFaces.splice(${i},1);renderFontFacesList('${targetId}');scheduleRender();">✕</button>
-      </div>
-    `;
-    el.appendChild(row);
-  });
-}
-
-function addFontFace(targetId) {
-  if (!state.fonts[targetId].customFaces) state.fonts[targetId].customFaces = [];
-  state.fonts[targetId].customFaces.push({ weight:'400', url:'', style:'normal' });
-  renderFontFacesList(targetId);
 }
 
 function updateFontPreview(targetId) {
   const f = state.fonts[targetId];
   const el = document.getElementById('fp-preview');
   if (!el) return;
-  if (f.family && f.family !== 'inherit') {
+  if (f.family && f.preset !== 'inherit') {
     el.style.fontFamily = f.family;
     el.style.fontWeight = f.weight || '400';
-    if (f.size) el.style.fontSize = f.size;
+    el.style.fontSize = f.size || '13px';
   } else {
-    el.style.fontFamily = '';
-    el.style.fontWeight = '';
-    el.style.fontSize = '';
+    el.style.fontFamily = el.style.fontWeight = el.style.fontSize = '';
   }
 }
 
@@ -791,6 +856,7 @@ function deleteSub2Section(pId,sId,s2Id) { const p=state.sections.find(s=>s.id==
 // ════════════════════════════════════════════════════════
 function renderIbRows() {
   const wrap = document.getElementById('ib-rows');
+  if (!wrap) return;
   wrap.innerHTML = '';
   state.infobox.rows.forEach((row,ri) => {
     const rowEl = document.createElement('div');
@@ -815,7 +881,7 @@ function deleteIbRow(ri) { state.infobox.rows.splice(ri,1); renderIbRows();sched
 // ════════════════════════════════════════════════════════
 function renderSectionEditors() {
   const wrap = document.getElementById('section-editors');
-  wrap.innerHTML = '';
+  if (!wrap) return;
   flattenSections(state.sections).forEach(({sec,depth,numStr}) => {
     const id = sec.id;
     if (!state.content[id]) state.content[id]='';
@@ -888,6 +954,7 @@ function insertFormat(sectionId,type) {
 // ════════════════════════════════════════════════════════
 function renderFootnoteList() {
   const wrap = document.getElementById('footnote-list');
+  if (!wrap) return;
   wrap.innerHTML = '';
   state.footnotes.forEach((fn,i)=>{
     const item = document.createElement('div');
@@ -983,30 +1050,63 @@ function applyInline(text,fnMap) {
 //  폰트 CSS 생성
 // ════════════════════════════════════════════════════════
 function buildFontCSS() {
-  const faceBlocks = [];
-  const importUrls = new Set();
+  let css = '';
+  const importUrls  = new Set();
+  const faceBlocks  = [];
+  const addedPreset = new Set(); // 프리셋 이름 기준 중복 방지
 
-  // 각 대상별로 @font-face / @import 수집
-  Object.values(state.fonts).forEach(f => {
-    if (f.googleUrl) importUrls.add(f.googleUrl);
-    (f.customFaces || []).forEach(face => {
-      if (!face.url) return;
-      const family = f.family.replace(/['"]/g,'').split(',')[0].trim();
-      faceBlocks.push(`@font-face {
-  font-family: '${family}';
-  src: url('${face.url}') format('woff2');
-  font-weight: ${face.weight || '400'};
-  font-style: ${face.style || 'normal'};
-  font-display: swap;
-}`);
-    });
+  // ── 1. 커스텀 등록 폰트: rawCss 그대로 출력 ──
+  customFonts.forEach(cf => {
+    if (cf.type === 'import') {
+      // rawCss = "@import url('...')" → URL만 추출
+      const m = cf.rawCss.match(/url\(\s*['"]?([^'")\s]+)['"]?\s*\)/);
+      if (m) importUrls.add(m[1]);
+    } else {
+      // @font-face 블록(들) 그대로
+      faceBlocks.push(cf.rawCss.trim());
+    }
+    addedPreset.add(cf.name);
   });
 
-  let css = '';
+  // ── 2. 빌트인 프리셋: 실제로 사용 중인 것만 ──
+  // 어떤 영역에서든 preset이 지정된 경우 수집
+  const usedPresets = new Set(
+    Object.values(state.fonts)
+      .map(f => f.preset)
+      .filter(p => p && p !== 'inherit')
+  );
+
+  usedPresets.forEach(presetName => {
+    if (addedPreset.has(presetName)) return; // 커스텀은 이미 처리
+    const p = FONT_PRESETS[presetName];
+    if (!p) return;
+    addedPreset.add(presetName);
+
+    if (p.import) {
+      // Google Fonts 등 @import
+      importUrls.add(p.import);
+    } else if (p.faces && p.faces.length) {
+      // @font-face CDN (Pretendard 등)
+      p.faces.forEach(face => {
+        if (!face.url) return;
+        faceBlocks.push(
+`@font-face {
+  font-family: '${presetName}';
+  src: url('${face.url}') format('woff2');
+  font-weight: ${face.weight || '400'};
+  font-style: normal;
+  font-display: swap;
+}`
+        );
+      });
+    }
+  });
+
+  // ── 조합 ──
   importUrls.forEach(url => { css += `@import url('${url}');\n`; });
-  css += '\n';
-  faceBlocks.forEach(b => { css += b + '\n'; });
-  return css;
+  if (importUrls.size) css += '\n';
+  faceBlocks.forEach(b  => { css += b + '\n\n'; });
+  return css.trim();
 }
 
 function fontFamilyCSS(targetId, fallback='') {
@@ -1069,7 +1169,7 @@ function generateHTML() {
   max-width: 900px; margin: 0 auto;
   padding: 16px 20px 48px; box-sizing: border-box;
 }
-${fontStyle('body') ? `.wiki-wrap { ${fontStyle('body')} }` : ''}
+${state.fonts.body?.customCss ? `.wiki-wrap { ${state.fonts.body.customCss.trim()} }` : ''}
 .wiki-wrap *, .wiki-wrap *::before, .wiki-wrap *::after { box-sizing: border-box; }
 .wiki-wrap a { color: var(--wk-link); text-decoration: none; }
 .wiki-wrap a:hover { text-decoration: underline; }
@@ -1377,12 +1477,13 @@ ${state.footnotes.map((fn,i)=>`<li id="wk-fn${escAttr(fn.label)}"><span class="f
 
   // ── state 직렬화: 이 주석을 파싱해서 나중에 복원 ──
   const serialized = JSON.stringify({
-    sections:  state.sections,
-    content:   state.content,
-    infobox:   state.infobox,
-    footnotes: state.footnotes,
-    style:     state.style,
-    fonts:     state.fonts,
+    sections:    state.sections,
+    content:     state.content,
+    infobox:     state.infobox,
+    footnotes:   state.footnotes,
+    style:       state.style,
+    fonts:       state.fonts,
+    customFonts: customFonts,
   });
 
   return `<!-- 폰트 -->
@@ -1410,7 +1511,7 @@ ${fnHtml}
 
 </div>
 <div id="wk-fn-tooltip"></div>
-<script>
+<scr` + `ipt>
 ${js.trim()}
 <\/script>
 <!-- PROFILE_BUILDER_STATE:${serialized}:END_PROFILE_BUILDER_STATE -->`;
@@ -1465,6 +1566,7 @@ function escAttr(s) { return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'
 // ════════════════════════════════════════════════════════
 
 function openImportModal() {
+  initImportEvents();
   document.getElementById('import-modal').classList.add('open');
   document.getElementById('import-textarea').value = '';
   document.getElementById('import-status').textContent = '';
@@ -1474,17 +1576,37 @@ function closeImportModal() {
   document.getElementById('import-modal').classList.remove('open');
 }
 
-// 드래그앤드롭
-(function() {
+// 드래그앤드롭 및 모달 이벤트 — openImportModal 호출 시 한 번만 초기화
+let _importEventsInited = false;
+function initImportEvents() {
+  if (_importEventsInited) return;
+  _importEventsInited = true;
+
   const zone = document.getElementById('drop-zone');
-  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
-  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault(); zone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) readFile(file);
-  });
-})();
+  if (zone) {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) readFile(file);
+    });
+  }
+  const ta = document.getElementById('import-textarea');
+  if (ta) {
+    ta.addEventListener('input', function() {
+      if (this.value.trim()) validateImport(this.value);
+      else {
+        document.getElementById('import-status').textContent = '';
+        document.getElementById('import-status').className = 'import-status';
+      }
+    });
+  }
+  const overlay = document.getElementById('import-modal');
+  if (overlay) {
+    overlay.addEventListener('click', function(e) { if (e.target === this) closeImportModal(); });
+  }
+}
 
 function onFileSelected(input) {
   if (input.files[0]) readFile(input.files[0]);
@@ -1548,28 +1670,35 @@ function applyImportedState(imported) {
   if (imported.sections)  state.sections  = imported.sections;
   if (imported.content)   state.content   = imported.content;
   if (imported.footnotes) state.footnotes = imported.footnotes;
-
-  // style: 기존 키 유지하면서 덮어쓰기
-  if (imported.style) Object.assign(state.style, imported.style);
-
-  // fonts: 대상별 병합 (새로 생긴 대상 키도 보존)
+  if (imported.style)     Object.assign(state.style, imported.style);
   if (imported.fonts) {
     Object.keys(imported.fonts).forEach(k => {
       state.fonts[k] = Object.assign({}, state.fonts[k] || {}, imported.fonts[k]);
     });
   }
-
-  // infobox 전체 복원
   if (imported.infobox) state.infobox = imported.infobox;
 
-  // ── 2. UI 동기화 ──
+  // ── 2. 커스텀 폰트 복원 ──
+  if (imported.customFonts && Array.isArray(imported.customFonts)) {
+    customFonts = [];
+    imported.customFonts.forEach(cf => {
+      customFonts.push(cf);
+      FONT_PRESETS[cf.name] = {
+        label: cf.name, import: cf.type === 'import' ? cf.rawCss.replace(/^@import\s+url\(['"]?|['"]?\)\s*;?$/g,'') : null,
+        faces: [], rawCss: cf.rawCss, custom: true,
+      };
+    });
+  }
+
+  // ── 3. UI 동기화 ──
   syncUIFromState();
 
-  // ── 3. 재렌더 ──
+  // ── 4. 재렌더 ──
   renderTocList();
   renderIbRows();
   renderFootnoteList();
   renderSectionEditors();
+  renderCustomFontList();
   renderFontPanel(currentFontTarget);
   doRender();
 }
@@ -1609,20 +1738,6 @@ function safeSet(id, val) {
   if (el) el.value = val;
 }
 
-// textarea 변경 시 실시간 유효성 확인
-document.getElementById('import-textarea').addEventListener('input', function() {
-  if (this.value.trim()) validateImport(this.value);
-  else {
-    document.getElementById('import-status').textContent = '';
-    document.getElementById('import-status').className = 'import-status';
-  }
-});
-
-// 모달 외부 클릭 시 닫기
-document.getElementById('import-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeImportModal();
-});
-
 // ── 초기화 ──
 document.getElementById('ib-charname').value = '키에르 디트-마루크 Cheir Djt-Marouc';
 document.getElementById('epigraph-title').value = 'ἐπίφορος';
@@ -1636,6 +1751,7 @@ document.getElementById('epigraph-title-color').value = state.infobox.epigraphTi
 document.getElementById('epigraph-quote-color').value = state.infobox.epigraphQuoteColor;
 renderTocList();
 renderIbRows();
+renderCustomFontList();
 renderFontPanel('body');
 doRender();
 </script>
