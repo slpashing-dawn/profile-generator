@@ -37,8 +37,9 @@
   .tab { flex:1; padding:9px 3px; text-align:center; font-size:10.5px; font-weight:600; cursor:pointer; color:var(--text-m); border-bottom:2px solid transparent; transition:all .2s; user-select:none; }
   .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
   .tab:hover:not(.active) { color:var(--text); }
-  .tab-content { flex:1; overflow-y:auto; padding:14px; display:none; min-height:0; }
-  .tab-content.active { display:flex; flex-direction:column; align-items:stretch; }
+  .tab-content { position:absolute; inset:0; overflow-y:auto; padding:14px; display:none; }
+  .tab-content.active { display:block; }
+  .tab-content-wrap { position:relative; flex:1; min-height:0; overflow:hidden; }
 
   /* ── 폼 ── */
   .form-group { margin-bottom:12px; }
@@ -61,7 +62,7 @@
 
   /* ── 목차 편집기 ── */
   .toc-list { list-style:none; }
-  .toc-item { background:var(--input-bg); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; overflow:hidden; }
+  .toc-item { background:var(--input-bg); border:1px solid var(--border); border-radius:6px; margin-bottom:6px; }
   .toc-item-header { display:flex; align-items:center; gap:6px; padding:7px 8px; }
   .toc-drag { color:var(--text-m); font-size:13px; cursor:grab; }
   .toc-num-badge { font-size:10px; font-weight:700; color:var(--accent); width:22px; text-align:center; flex-shrink:0; }
@@ -75,7 +76,7 @@
   .toc-children { padding:0 8px 6px 28px; display:none; }
   .toc-item.expanded > .toc-children { display:block; }
   .toc-sub-list { list-style:none; }
-  .toc-sub-item { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:4px; margin-bottom:4px; overflow:hidden; }
+  .toc-sub-item { background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:4px; margin-bottom:4px; }
   .toc-sub-header { display:flex; align-items:center; gap:6px; padding:5px 7px; }
   .toc-sub-num { font-size:10px; color:var(--text-m); width:28px; flex-shrink:0; }
   .toc-sub-header input[type="text"] { flex:1; background:transparent; border:none; padding:2px 4px; font-size:11px; color:var(--text); border-bottom:1px solid transparent; }
@@ -210,6 +211,7 @@
     </div>
 
     <!-- 목차 탭 -->
+    <div class="tab-content-wrap">
     <div id="tab-toc" class="tab-content active">
       <div class="hint">섹션 제목을 수정하거나 추가/삭제하세요. ▶ 클릭 시 하위 목차를 펼칩니다.</div><br>
       <ul class="toc-list" id="toc-list"></ul>
@@ -334,6 +336,7 @@
         <div><label>줄 간격</label><input type="text" id="s-lineheight" value="1.7" oninput="scheduleRender()"></div>
       </div>
     </div>
+    </div><!-- /tab-content-wrap -->
   </aside>
 
   <!-- 미리보기 -->
