@@ -163,7 +163,24 @@
   .format-guide code { background:rgba(255,255,255,.08); border-radius:3px; padding:0 4px; font-family:monospace; font-size:10px; color:#aef; }
   .toast { position:fixed; bottom:20px; right:20px; background:var(--success); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; font-weight:600; z-index:9999; transform:translateY(60px); opacity:0; transition:all .3s ease; pointer-events:none; }
   .toast.show { transform:translateY(0); opacity:1; }
-  .font-preview-text { font-size:11px; color:var(--text-m); margin-top:6px; padding:6px 8px; background:var(--bg); border-radius:4px; font-style:italic; }
+  /* ── 불러오기 모달 ── */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:8000; display:none; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--panel); border:1px solid var(--border); border-radius:12px; width:min(640px,92vw); max-height:80vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .modal-header { padding:16px 20px 12px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .modal-header h2 { font-size:14px; font-weight:700; color:var(--text); }
+  .modal-body { padding:16px 20px; overflow-y:auto; flex:1; }
+  .modal-footer { padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:8px; justify-content:flex-end; flex-shrink:0; }
+  .modal-close { background:none; border:none; color:var(--text-m); font-size:18px; cursor:pointer; padding:2px 6px; border-radius:4px; }
+  .modal-close:hover { color:var(--accent); background:rgba(255,255,255,.07); }
+  .import-area { width:100%; min-height:180px; background:var(--input-bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:'Consolas','Courier New',monospace; font-size:11px; padding:12px; resize:vertical; line-height:1.5; transition:border-color .2s; }
+  .import-area:focus { outline:none; border-color:var(--accent); }
+  .import-status { margin-top:8px; font-size:11px; min-height:18px; }
+  .import-status.ok  { color:var(--success); }
+  .import-status.err { color:var(--accent); }
+  .drop-zone { border:2px dashed var(--border); border-radius:8px; padding:18px; text-align:center; font-size:12px; color:var(--text-m); margin-bottom:12px; cursor:pointer; transition:all .2s; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color:var(--accent); color:var(--accent); background:rgba(233,69,96,.05); }
+  .drop-zone input[type="file"] { display:none; }
 </style>
 </head>
 <body>
@@ -174,6 +191,7 @@
     <div class="sub">티스토리 HTML 에디터용 코드 생성기</div>
   </div>
   <div class="header-actions">
+    <button class="btn btn-secondary" onclick="openImportModal()">📂 불러오기</button>
     <button class="btn btn-secondary" onclick="toggleCode()">📋 HTML 코드 보기</button>
     <button class="btn btn-secondary" onclick="copyCode()">📄 복사</button>
     <button class="btn btn-primary" onclick="downloadCode()">⬇ 다운로드</button>
@@ -311,6 +329,35 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ══ 불러오기 모달 ══ -->
+<div class="modal-overlay" id="import-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>📂 프로필 코드 불러오기</h2>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" style="margin-bottom:14px;">
+        이전에 이 빌더로 생성·다운로드한 HTML 파일을 불러오면 목차·내용·폰트·색상 등 모든 설정이 복원됩니다.<br>
+        파일을 드래그하거나, 클릭해서 선택하거나, 아래에 HTML 코드를 직접 붙여넣을 수 있어요.
+      </div>
+      <!-- 파일 드롭존 -->
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <input type="file" id="file-input" accept=".html,.htm" onchange="onFileSelected(this)">
+        📄 HTML 파일을 여기에 드래그하거나 클릭해서 선택하세요
+      </div>
+      <!-- 코드 직접 붙여넣기 -->
+      <label style="display:block;font-size:11px;color:var(--text-m);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">또는 HTML 코드 직접 붙여넣기</label>
+      <textarea class="import-area" id="import-textarea" placeholder="생성된 HTML 코드를 여기에 붙여넣으세요..."></textarea>
+      <div class="import-status" id="import-status"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeImportModal()">취소</button>
+      <button class="btn btn-primary" onclick="doImport()">✓ 불러오기</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ════════════════════════════════════════════════════════
@@ -1328,6 +1375,16 @@ ${state.footnotes.map((fn,i)=>`<li id="wk-fn${escAttr(fn.label)}"><span class="f
 })();
 `;
 
+  // ── state 직렬화: 이 주석을 파싱해서 나중에 복원 ──
+  const serialized = JSON.stringify({
+    sections:  state.sections,
+    content:   state.content,
+    infobox:   state.infobox,
+    footnotes: state.footnotes,
+    style:     state.style,
+    fonts:     state.fonts,
+  });
+
   return `<!-- 폰트 -->
 <div><style>
 ${fontCss.trim()}
@@ -1355,7 +1412,8 @@ ${fnHtml}
 <div id="wk-fn-tooltip"></div>
 <script>
 ${js.trim()}
-<\/script>`;
+<\/script>
+<!-- PROFILE_BUILDER_STATE:${serialized}:END_PROFILE_BUILDER_STATE -->`;
 }
 
 // ════════════════════════════════════════════════════════
@@ -1401,6 +1459,169 @@ function showToast(msg) {
 
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function escAttr(s) { return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+// ════════════════════════════════════════════════════════
+//  불러오기 (Import)
+// ════════════════════════════════════════════════════════
+
+function openImportModal() {
+  document.getElementById('import-modal').classList.add('open');
+  document.getElementById('import-textarea').value = '';
+  document.getElementById('import-status').textContent = '';
+  document.getElementById('import-status').className = 'import-status';
+}
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('open');
+}
+
+// 드래그앤드롭
+(function() {
+  const zone = document.getElementById('drop-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) readFile(file);
+  });
+})();
+
+function onFileSelected(input) {
+  if (input.files[0]) readFile(input.files[0]);
+}
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('import-textarea').value = e.target.result;
+    validateImport(e.target.result);
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function validateImport(html) {
+  const status = document.getElementById('import-status');
+  const parsed = extractState(html);
+  if (parsed) {
+    status.textContent = '✓ 유효한 프로필 코드입니다. 불러오기 버튼을 누르세요.';
+    status.className = 'import-status ok';
+  } else {
+    status.textContent = '⚠ 이 빌더로 생성된 코드에서 저장 데이터를 찾을 수 없습니다. 붙여넣은 코드를 확인해 주세요.';
+    status.className = 'import-status err';
+  }
+}
+
+function extractState(html) {
+  const marker = '<!-- PROFILE_BUILDER_STATE:';
+  const endMarker = ':END_PROFILE_BUILDER_STATE -->';
+  const start = html.indexOf(marker);
+  const end   = html.indexOf(endMarker);
+  if (start === -1 || end === -1) return null;
+  try {
+    const json = html.slice(start + marker.length, end);
+    return JSON.parse(json);
+  } catch(e) {
+    return null;
+  }
+}
+
+function doImport() {
+  const html = document.getElementById('import-textarea').value.trim();
+  if (!html) {
+    document.getElementById('import-status').textContent = '코드를 붙여넣거나 파일을 선택해 주세요.';
+    document.getElementById('import-status').className = 'import-status err';
+    return;
+  }
+  const parsed = extractState(html);
+  if (!parsed) {
+    document.getElementById('import-status').textContent = '⚠ 저장 데이터를 찾을 수 없습니다. 이 빌더로 생성된 HTML 코드인지 확인해 주세요.';
+    document.getElementById('import-status').className = 'import-status err';
+    return;
+  }
+  applyImportedState(parsed);
+  closeImportModal();
+  showToast('✓ 프로필을 불러왔습니다!');
+}
+
+function applyImportedState(imported) {
+  // ── 1. state 복원 ──
+  if (imported.sections)  state.sections  = imported.sections;
+  if (imported.content)   state.content   = imported.content;
+  if (imported.footnotes) state.footnotes = imported.footnotes;
+
+  // style: 기존 키 유지하면서 덮어쓰기
+  if (imported.style) Object.assign(state.style, imported.style);
+
+  // fonts: 대상별 병합 (새로 생긴 대상 키도 보존)
+  if (imported.fonts) {
+    Object.keys(imported.fonts).forEach(k => {
+      state.fonts[k] = Object.assign({}, state.fonts[k] || {}, imported.fonts[k]);
+    });
+  }
+
+  // infobox 전체 복원
+  if (imported.infobox) state.infobox = imported.infobox;
+
+  // ── 2. UI 동기화 ──
+  syncUIFromState();
+
+  // ── 3. 재렌더 ──
+  renderTocList();
+  renderIbRows();
+  renderFootnoteList();
+  renderSectionEditors();
+  renderFontPanel(currentFontTarget);
+  doRender();
+}
+
+function syncUIFromState() {
+  const ib = state.infobox;
+  const s  = state.style;
+
+  // 인포박스
+  safeSet('ib-charname',           ib.charname        || '');
+  safeSet('epigraph-title',        ib.epigraphTitle   || '');
+  safeSet('epigraph-text',         ib.epigraphText    || '');
+  safeSet('epigraph-bg',           ib.epigraphBg      || '#F9D142');
+  safeSet('epigraph-title-bg',     ib.epigraphTitleBg    || '#292826');
+  safeSet('epigraph-title-color',  ib.epigraphTitleColor || '#ffffff');
+  safeSet('epigraph-quote-color',  ib.epigraphQuoteColor || '#292826');
+
+  // 색상 탭
+  safeSet('s-bg',         s.bg        || '#ffffff');
+  safeSet('s-text',       s.text      || '#202122');
+  safeSet('s-link',       s.link      || '#3366cc');
+  safeSet('s-text-m',     s.textM     || '#54595d');
+  safeSet('s-border',     s.border    || '#a2a9b1');
+  safeSet('s-border-lt',  s.borderLt  || '#d9d9d9');
+  safeSet('s-toc-bg',     s.tocBg     || '#f8f9fa');
+  safeSet('s-toc-head',   s.tocHead   || '#eaecf0');
+  safeSet('s-h2-color',   s.h2Color   || '#202122');
+  safeSet('s-h2-num',     s.h2Num     || '#54595d');
+  safeSet('s-h3-color',   s.h3Color   || '#202122');
+  safeSet('s-h3-num',     s.h3Num     || '#72777d');
+  safeSet('s-fontsize',   s.fontSize  || '14px');
+  safeSet('s-lineheight', s.lineHeight|| '1.7');
+}
+
+function safeSet(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+// textarea 변경 시 실시간 유효성 확인
+document.getElementById('import-textarea').addEventListener('input', function() {
+  if (this.value.trim()) validateImport(this.value);
+  else {
+    document.getElementById('import-status').textContent = '';
+    document.getElementById('import-status').className = 'import-status';
+  }
+});
+
+// 모달 외부 클릭 시 닫기
+document.getElementById('import-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeImportModal();
+});
 
 // ── 초기화 ──
 document.getElementById('ib-charname').value = '키에르 디트-마루크 Cheir Djt-Marouc';
