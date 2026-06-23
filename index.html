@@ -247,7 +247,12 @@
 
     <!-- 각주 탭 -->
     <div id="tab-footnote" class="tab-content">
-      <div class="hint">각주 추가 시 클릭 시 말풍선 팝업이 자동 구현됩니다. 본문에서 <code style="background:rgba(255,255,255,.1);padding:1px 4px;border-radius:3px;font-family:monospace">[^레이블]</code>로 삽입하세요.</div><br>
+      <div class="hint">
+        <b style="color:var(--text);">사용 방법</b><br>
+        ① 여기서 <b>＋ 각주 추가</b>로 항목을 만들고 내용을 입력<br>
+        ② 또는 내용 탭의 <b>각주 버튼</b>을 누르면 자동으로 여기에 추가됨<br>
+        ③ 본문에 삽입된 <code style="background:rgba(255,255,255,.1);padding:0 3px;border-radius:3px;font-family:monospace">[^레이블]</code>과 여기 레이블이 일치해야 말풍선이 작동해요
+      </div><br>
       <div id="footnote-list"></div>
       <button class="add-section-btn" onclick="addFootnote()">＋ 각주 추가</button>
     </div>
@@ -569,8 +574,13 @@ function registerCustomFont() {
       const famMatch = urlMatch[1].match(/family=([^&:]+)/);
       if (famMatch) name = decodeURIComponent(famMatch[1].split(':')[0].replace(/\+/g,' '));
     }
-    if (!name) name = prompt('폰트 이름을 입력해 주세요 (font-family에 사용할 이름):');
-    if (!name) return;
+    if (!name) {
+      showInlineInput('폰트 이름을 입력해 주세요 (font-family에 사용할 이름)', '', (input) => {
+        if (!input) return;
+        addCustomFontEntry(input.trim(), raw, 'import');
+      });
+      return;
+    }
     name = name.trim();
     addCustomFontEntry(name, raw, 'import');
     return;
@@ -932,21 +942,99 @@ function toggleSectionEditor(id, headerEl) {
   editor.querySelector('.section-editor-toggle').textContent = editor.classList.contains('open')?'▼':'▶';
 }
 
-function insertFormat(sectionId,type) {
+function insertFormat(sectionId, type) {
   const ta = document.getElementById(`content-${sectionId}`);
   if (!ta) return;
-  const start=ta.selectionStart, end=ta.selectionEnd, sel=ta.value.substring(start,end);
-  let before='',after='';
-  if(type==='bold'){before='**';after='**';}
-  if(type==='italic'){before='*';after='*';}
-  if(type==='strike'){before='~~';after='~~';}
-  if(type==='more'){before='[more]';after='[/more]';}
-  if(type==='fn'){const lbl=prompt('각주 레이블 입력:');if(!lbl)return;before=`[^${lbl}]`;after='';}
-  if(type==='link'){const url=prompt('URL 입력:');if(!url)return;ta.setRangeText(`<a href="${url}">${sel||'링크텍스트'}</a>`,start,end,'end');state.content[sectionId]=ta.value;scheduleRender();return;}
-  if(type==='ul'){ta.setRangeText(`\n- ${sel||'항목'}`,start,end,'end');state.content[sectionId]=ta.value;scheduleRender();return;}
-  if(type==='ol'){ta.setRangeText(`\n1. ${sel||'항목'}`,start,end,'end');state.content[sectionId]=ta.value;scheduleRender();return;}
-  ta.setRangeText(before+(sel||'텍스트')+after,start,end,'end');
-  state.content[sectionId]=ta.value;scheduleRender();
+  const start = ta.selectionStart, end = ta.selectionEnd, sel = ta.value.substring(start, end);
+
+  if (type === 'fn') {
+    showInlineInput('각주 레이블 입력 (예: 1, 스포일러)', '', (lbl) => {
+      if (!lbl) return;
+      lbl = lbl.trim();
+      const tag = `[^${lbl}]`;
+      ta.setRangeText(tag, start, end, 'end');
+      state.content[sectionId] = ta.value;
+      if (!state.footnotes.find(f => f.label === lbl)) {
+        state.footnotes.push({ label: lbl, text: '(각주 내용을 입력하세요)' });
+        renderFootnoteList();
+      }
+      scheduleRender();
+    });
+    return;
+  }
+
+  if (type === 'link') {
+    showInlineInput('링크 URL 입력', 'https://', (url) => {
+      if (!url) return;
+      ta.setRangeText(`<a href="${url}">${sel || '링크텍스트'}</a>`, start, end, 'end');
+      state.content[sectionId] = ta.value;
+      scheduleRender();
+    });
+    return;
+  }
+
+  let before = '', after = '';
+  if (type === 'bold')   { before = '**'; after = '**'; }
+  if (type === 'italic') { before = '*';  after = '*';  }
+  if (type === 'strike') { before = '~~'; after = '~~'; }
+  if (type === 'more')   { before = '[more]'; after = '[/more]'; }
+  if (type === 'ul')     { ta.setRangeText(`\n- ${sel || '항목'}`, start, end, 'end'); state.content[sectionId] = ta.value; scheduleRender(); return; }
+  if (type === 'ol')     { ta.setRangeText(`\n1. ${sel || '항목'}`, start, end, 'end'); state.content[sectionId] = ta.value; scheduleRender(); return; }
+
+  ta.setRangeText(before + (sel || '텍스트') + after, start, end, 'end');
+  state.content[sectionId] = ta.value;
+  scheduleRender();
+}
+
+// prompt() 대신 쓰는 인라인 입력 팝업
+function showInlineInput(labelText, defaultVal, callback) {
+  // 기존 팝업 제거
+  const existing = document.getElementById('inline-input-popup');
+  if (existing) existing.remove();
+
+  const popup = document.createElement('div');
+  popup.id = 'inline-input-popup';
+  popup.style.cssText = `
+    position:fixed; inset:0; background:rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center; z-index:9000;
+  `;
+  popup.innerHTML = `
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:20px;width:320px;box-shadow:0 8px 32px rgba(0,0,0,.4);">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;">${labelText}</div>
+      <input id="inline-input-field" type="text" value="${defaultVal}"
+        style="width:100%;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;
+               color:var(--text);font-size:13px;padding:8px 10px;outline:none;font-family:inherit;"
+        onkeydown="if(event.key==='Enter'){document.getElementById('inline-input-ok').click();}
+                   if(event.key==='Escape'){document.getElementById('inline-input-popup').remove();}">
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+        <button onclick="document.getElementById('inline-input-popup').remove();"
+          style="padding:6px 14px;background:transparent;border:1px solid var(--border);border-radius:6px;
+                 color:var(--text-m);cursor:pointer;font-size:12px;">취소</button>
+        <button id="inline-input-ok"
+          style="padding:6px 14px;background:var(--accent);border:none;border-radius:6px;
+                 color:#fff;cursor:pointer;font-size:12px;font-weight:700;">확인</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  const field = document.getElementById('inline-input-field');
+  const okBtn = document.getElementById('inline-input-ok');
+
+  // 텍스트 전체 선택
+  setTimeout(() => { field.focus(); field.select(); }, 50);
+
+  okBtn.addEventListener('click', () => {
+    const val = field.value;
+    popup.remove();
+    callback(val);
+  });
+
+  // 배경 클릭 시 닫기
+  popup.addEventListener('click', (e) => {
+    if (e.target === popup) popup.remove();
+  });
 }
 
 // ════════════════════════════════════════════════════════
@@ -956,17 +1044,36 @@ function renderFootnoteList() {
   const wrap = document.getElementById('footnote-list');
   if (!wrap) return;
   wrap.innerHTML = '';
-  state.footnotes.forEach((fn,i)=>{
+  state.footnotes.forEach((fn, i) => {
     const item = document.createElement('div');
     item.className = 'footnote-item';
-    item.innerHTML = `
-      <span class="footnote-num">[${i+1}]</span>
-      <input type="text" value="${escHtml(fn.label)}" placeholder="레이블" style="width:100px;flex-shrink:0;">
-      <input type="text" value="${escHtml(fn.text)}" placeholder="각주 내용">
-      <button class="toc-btn danger" onclick="deleteFootnote(${i})">✕</button>`;
-    const [,labelInput,textInput] = item.querySelectorAll('input');
-    labelInput.addEventListener('input',e=>{fn.label=e.target.value;scheduleRender();});
-    textInput.addEventListener('input',e=>{fn.text=e.target.value;scheduleRender();});
+
+    const num = document.createElement('span');
+    num.className = 'footnote-num';
+    num.textContent = `[${i+1}]`;
+
+    const labelInput = document.createElement('input');
+    labelInput.type = 'text';
+    labelInput.value = fn.label;
+    labelInput.placeholder = '레이블';
+    labelInput.style.cssText = 'width:100px;flex-shrink:0;';
+    labelInput.addEventListener('input', e => { fn.label = e.target.value; scheduleRender(); });
+
+    const textInput = document.createElement('input');
+    textInput.type = 'text';
+    textInput.value = fn.text;
+    textInput.placeholder = '각주 내용';
+    textInput.addEventListener('input', e => { fn.text = e.target.value; scheduleRender(); });
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'toc-btn danger';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', () => deleteFootnote(i));
+
+    item.appendChild(num);
+    item.appendChild(labelInput);
+    item.appendChild(textInput);
+    item.appendChild(delBtn);
     wrap.appendChild(item);
   });
 }
