@@ -809,7 +809,12 @@ function buildTocItem(sec,si) {
   subList.className = 'toc-sub-list';
   sec.children.forEach((sub,ci)=>subList.appendChild(buildTocSubItem(sub,si,ci,sec.id)));
   children.appendChild(subList);
-  children.innerHTML += `<button class="add-section-btn" style="font-size:11px;padding:5px;margin-top:4px;" onclick="addSubSection('${sec.id}')">＋ 하위 항목 추가</button>`;
+  const addSubBtn = document.createElement('button');
+  addSubBtn.className = 'add-section-btn';
+  addSubBtn.style.cssText = 'font-size:11px;padding:5px;margin-top:4px;';
+  addSubBtn.textContent = '＋ 하위 항목 추가';
+  addSubBtn.onclick = () => addSubSection(sec.id);
+  children.appendChild(addSubBtn);
   li.appendChild(header); li.appendChild(children);
   return li;
 }
@@ -834,7 +839,12 @@ function buildTocSubItem(sub,si,ci,parentId) {
   sub2List.className = 'toc-sub2-list';
   (sub.children||[]).forEach((sub2,di)=>sub2List.appendChild(buildTocSub2Item(sub2,si,ci,di,parentId,sub.id)));
   subChildren.appendChild(sub2List);
-  subChildren.innerHTML += `<button class="add-section-btn" style="font-size:10px;padding:4px;margin-top:3px;" onclick="addSubSubSection('${parentId}','${sub.id}')">＋ 하위하위 항목 추가</button>`;
+  const addSub2Btn = document.createElement('button');
+  addSub2Btn.className = 'add-section-btn';
+  addSub2Btn.style.cssText = 'font-size:10px;padding:4px;margin-top:3px;';
+  addSub2Btn.textContent = '＋ 하위하위 항목 추가';
+  addSub2Btn.onclick = () => addSubSubSection(parentId, sub.id);
+  subChildren.appendChild(addSub2Btn);
   li.appendChild(header); li.appendChild(subChildren);
   return li;
 }
