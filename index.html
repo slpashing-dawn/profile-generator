@@ -1242,11 +1242,18 @@ function mdToHtml(text) {
   if(inMore)html+='</div></div>\n';
   return html;
 }
-function applyInline(text,fnMap) {
-  text=text.replace(/\[\^([^\]]+)\]/g,(_,lbl)=>`<sup class="fn" data-fn="${escAttr(lbl)}">[${escHtml(String(lbl))}]</sup>`);
-  text=text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-  text=text.replace(/\*(.+?)\*/g,'<em>$1</em>');
-  text=text.replace(/~~(.+?)~~/g,'<s>$1</s>');
+function applyInline(text, fnMap) {
+  // 각주: JS 없이 CSS checkbox 트릭으로 말풍선 구현
+  // <label>+<input checkbox>+<span> 구조 — 티스토리 script 제거와 무관하게 작동
+  text = text.replace(/\[\^([^\]]+)\]/g, (_, lbl) => {
+    const fn = state.footnotes.find(f => f.label === lbl);
+    const content = fn ? escHtml(fn.text) : escHtml(lbl);
+    const uid = 'fn-' + lbl.replace(/[^a-zA-Z0-9가-힣]/g, '_');
+    return `<span class="fn-wrap"><input type="checkbox" id="${uid}" class="fn-chk"><label for="${uid}" class="fn-label">[${escHtml(String(lbl))}]</label><span class="fn-bubble"><span class="fn-bubble-inner">${content}</span></span></span>`;
+  });
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  text = text.replace(/~~(.+?)~~/g, '<s>$1</s>');
   return text;
 }
 
@@ -1387,12 +1394,8 @@ ${state.fonts.body?.customCss ? `.wiki-wrap { ${state.fonts.body.customCss.trim(
   ${state.fonts.h2?.customCss || ''}
   border-bottom: 1px solid var(--wk-border);
   padding-bottom: 3px; margin: 24px 0 0; color: ${s.h2Color};
-  cursor: pointer; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; user-select: none;
 }
-.wiki-wrap .wiki-h2:hover { background: #f8f9fa; }
 .wiki-wrap .wiki-h2 .hnum { font-size: calc(${fontSizeCSS('h2','20px')} * 0.8); color: ${s.h2Num}; margin-right: 4px; }
-.wiki-wrap .wiki-h2 .h2-toggle { font-size: 12px; color: #72777d; font-weight: 400; flex-shrink: 0; transition: transform .2s; }
-.wiki-wrap .wiki-h2.collapsed .h2-toggle { transform: rotate(-90deg); }
 
 /* H3 */
 .wiki-wrap .wiki-h3 {
@@ -1414,37 +1417,58 @@ ${state.fonts.body?.customCss ? `.wiki-wrap { ${state.fonts.body.customCss.trim(
 }
 .wiki-wrap .wiki-h4 .hnum { font-size: calc(${fontSizeCSS('h4','14px')} * 0.85); color: ${s.h3Num}; margin-right: 3px; }
 
-.wiki-wrap .section-body { margin-top: 10px; overflow: hidden; transition: max-height .25s ease, opacity .2s ease; max-height: 9999px; opacity: 1; }
-.wiki-wrap .section-body.collapsed { max-height: 0 !important; opacity: 0; }
+.wiki-wrap .section-body { margin-top: 10px; }
 .wiki-wrap .wiki-p { margin: 0 0 10px; word-break: keep-all; overflow-wrap: break-word; }
 .wiki-wrap .wiki-p:last-child { margin-bottom: 0; }
 .wiki-wrap ul.namu-list, .wiki-wrap ol.namu-list { padding-left: 24px; margin: 6px 0 10px; }
 .wiki-wrap ul.namu-list li, .wiki-wrap ol.namu-list li { margin: 3px 0; }
 
-/* 각주 마크 */
-.wiki-wrap sup.fn { font-size: 11px; color: var(--wk-link); cursor: pointer; vertical-align: super; line-height: 0; border-bottom: 1px dotted var(--wk-link); }
-.wiki-wrap sup.fn:hover { color: #1a4a99; }
-
-/* 말풍선 툴팁 */
-.wk-fn-tooltip {
-  display: none; position: fixed;
-  background: #fff; border: 1px solid var(--wk-border, #a2a9b1); border-radius: 8px;
-  padding: 10px 14px;
+/* 각주 — CSS only 말풍선 */
+.wiki-wrap .fn-wrap { position: relative; display: inline; }
+.wiki-wrap .fn-chk { display: none; }
+.wiki-wrap .fn-label {
+  font-size: 11px; color: var(--wk-link);
+  cursor: pointer; vertical-align: super; line-height: 0;
+  border-bottom: 1px dotted var(--wk-link);
+  user-select: none;
+}
+.wiki-wrap .fn-label:hover { color: #1a4a99; }
+.wiki-wrap .fn-bubble {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 14px);
+  left: 50%; transform: translateX(-50%);
+  width: 260px;
+  z-index: 9999;
+}
+.wiki-wrap .fn-bubble-inner {
+  display: block;
+  background: #fff; border: 1px solid ${s.border};
+  border-radius: 8px; padding: 8px 13px;
   font-size: ${fontSizeCSS('tooltip','13px')};
   ${fontFamilyCSS('tooltip') ? `font-family:${fontFamilyCSS('tooltip')};` : `font-family:${bodyFont};`}
-  ${fontWeightCSS('tooltip') !== '400' ? `font-weight:${fontWeightCSS('tooltip')};` : ''}
-  ${state.fonts.tooltip?.customCss || ''}
   color: ${s.text}; line-height: 1.6;
-  width: max-content; max-width: min(480px, 90vw);
-  box-shadow: 0 4px 16px rgba(0,0,0,.15);
-  z-index: 2147483647; pointer-events: none;
+  word-break: keep-all; overflow-wrap: break-word;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
 }
-.wk-fn-tooltip.visible { display: block; }
-.wk-fn-tooltip::after, .wk-fn-tooltip::before { content:''; position:absolute; left:var(--wk-arr,50%); border:7px solid transparent; }
-.wk-fn-tooltip.arr-down::after  { top:100%; border-top-color:#a2a9b1; }
-.wk-fn-tooltip.arr-down::before { top:calc(100% - 1px); border-top-color:#fff; z-index:1; }
-.wk-fn-tooltip.arr-up::after    { bottom:100%; border-bottom-color:#a2a9b1; }
-.wk-fn-tooltip.arr-up::before   { bottom:calc(100% - 1px); border-bottom-color:#fff; z-index:1; }
+.wiki-wrap .fn-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border: 7px solid transparent;
+  border-top-color: ${s.border};
+}
+.wiki-wrap .fn-bubble::before {
+  content: '';
+  position: absolute;
+  top: calc(100% - 1px); left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border: 7px solid transparent;
+  border-top-color: #fff;
+  z-index: 1;
+}
+.wiki-wrap .fn-chk:checked ~ .fn-bubble { display: block; }
 
 /* 각주 섹션 */
 .wiki-wrap .footnote-section {
@@ -1552,44 +1576,50 @@ ${tableRows}
 </table>`;
 
   // ── 목차 ──
-  function buildTocHtml(sections,depth=0,numBase='') {
+  function buildTocHtml(sections, depth=0, numBase='') {
     let h='<ol>\n';
-    sections.forEach((sec,si)=>{
-      const num=numBase?`${numBase}.${si+1}`:`${si+1}`;
-      const nc=depth===0?'toc-num':depth===1?'toc-num-sub':'toc-num-sub2';
-      const liId=depth===0?` id="toc-li-${sec.id}"`:'';
-      h+=`<li${liId}><a href="javascript:void(0)" data-target="wk-${sec.id}"><span class="${nc}">${num}.</span> ${escHtml(sec.title)}</a>`;
-      if(sec.children&&sec.children.length) h+='\n'+buildTocHtml(sec.children,depth+1,num);
-      h+=`</li>\n`;
+    sections.forEach((sec, si) => {
+      const num = numBase ? `${numBase}.${si+1}` : `${si+1}`;
+      const nc = depth===0 ? 'toc-num' : depth===1 ? 'toc-num-sub' : 'toc-num-sub2';
+      const liId = depth===0 ? ` id="toc-li-${sec.id}"` : '';
+      // 실제 앵커 href — 티스토리 편집 후에도 살아남음
+      h += `<li${liId}><a href="#${sec.id}-anchor"><span class="${nc}">${num}.</span> ${escHtml(sec.title)}</a>`;
+      if (sec.children && sec.children.length) h += '\n' + buildTocHtml(sec.children, depth+1, num);
+      h += `</li>\n`;
     });
-    h+='</ol>\n'; return h;
+    h += '</ol>\n'; return h;
   }
-  const tocHtml = `<div id="wk-toc" class="toc-box">
-<div class="toc-header">목차 <button id="wk-toc-btn" class="toc-toggle-btn">숨기기</button></div>
+  const tocHtml = `<div class="toc-box">
+<div class="toc-header">목차 <button id="wk-toc-btn" class="toc-toggle-btn" onclick="(function(b){var i=b.parentNode.nextElementSibling;var h=i.style.display==='none';i.style.display=h?'':'none';b.textContent=h?'숨기기':'보이기';})(this)">숨기기</button></div>
 <div id="wk-toc-inner" class="toc-inner">
 ${buildTocHtml(state.sections)}
 </div>
 </div>`;
 
   // ── 섹션 본문 ──
-  function buildSectionsHtml(sections,depth=0,numBase='') {
-    let h='';
-    sections.forEach((sec,si)=>{
-      const num=numBase?`${numBase}.${si+1}`:`${si+1}`;
-      const content=mdToHtml(state.content[sec.id]||'내용을 입력하세요.');
-      const hasCh=sec.children&&sec.children.length>0;
-      if(depth===0){
-        h+=`<!-- ${num}. ${sec.title} -->\n`;
-        h+=`<h2 id="wk-${sec.id}" class="wiki-h2" data-sec="${sec.id}" data-ke-size="size26"><span><span class="hnum">${num}.</span> ${escHtml(sec.title)}</span><span class="h2-toggle">▼</span></h2>\n`;
-        h+=`<div id="body-${sec.id}" class="section-body">\n`;
-        h+=hasCh?buildSectionsHtml(sec.children,1,num):content;
-        h+=`</div>\n`;
-      } else if(depth===1){
-        h+=`<h3 id="wk-${sec.id}" class="wiki-h3" data-ke-size="size23"><span class="hnum">${num}.</span> ${escHtml(sec.title)}</h3>\n`;
-        h+=hasCh?buildSectionsHtml(sec.children,2,num):content;
+  function buildSectionsHtml(sections, depth=0, numBase='') {
+    let h = '';
+    sections.forEach((sec, si) => {
+      const num = numBase ? `${numBase}.${si+1}` : `${si+1}`;
+      const content = mdToHtml(state.content[sec.id] || '내용을 입력하세요.');
+      const hasCh = sec.children && sec.children.length > 0;
+      // 앵커 태그: <a name="..."> 형태는 티스토리가 잘 보존함
+      const anchor = `<a name="${sec.id}-anchor" id="${sec.id}-anchor" style="display:block;position:relative;top:-60px;visibility:hidden;"></a>`;
+      if (depth===0) {
+        h += `<!-- ${num}. ${sec.title} -->\n`;
+        h += anchor;
+        h += `<h2 class="wiki-h2" data-ke-size="size26"><span><span class="hnum">${num}.</span> ${escHtml(sec.title)}</span></h2>\n`;
+        h += `<div class="section-body">\n`;
+        h += hasCh ? buildSectionsHtml(sec.children, 1, num) : content;
+        h += `</div>\n`;
+      } else if (depth===1) {
+        h += anchor;
+        h += `<h3 class="wiki-h3" data-ke-size="size23"><span class="hnum">${num}.</span> ${escHtml(sec.title)}</h3>\n`;
+        h += hasCh ? buildSectionsHtml(sec.children, 2, num) : content;
       } else {
-        h+=`<h4 id="wk-${sec.id}" class="wiki-h4"><span class="hnum">${num}.</span> ${escHtml(sec.title)}</h4>\n`;
-        h+=content;
+        h += anchor;
+        h += `<h4 class="wiki-h4"><span class="hnum">${num}.</span> ${escHtml(sec.title)}</h4>\n`;
+        h += content;
       }
     });
     return h;
@@ -1604,103 +1634,10 @@ ${state.footnotes.map((fn,i)=>`<li id="wk-fn${escAttr(fn.label)}"><span class="f
 </ol>
 </div>`:'';
 
-  // ── JS ──
+  // ── JS (더보기만 — 티스토리 자체 처리가 있지만 fallback으로) ──
   const js = `
 (function(){
-  /* ── 툴팁 요소: wiki-wrap 안에서 찾기 ── */
-  var wrap=document.querySelector('.wiki-wrap');
-  if(!wrap)return;
-
-  /* ── 목차 숨기기/보이기 ── */
-  var tocBtn=document.getElementById('wk-toc-btn'),tocInner=document.getElementById('wk-toc-inner');
-  if(tocBtn&&tocInner){
-    tocBtn.addEventListener('click',function(e){
-      e.stopPropagation();
-      var h=tocInner.style.display==='none';
-      tocInner.style.display=h?'':'none';
-      tocBtn.textContent=h?'숨기기':'보이기';
-    });
-  }
-
-  /* ── 목차 클릭 → 이동 ── */
-  wrap.querySelectorAll('.toc-inner a[data-target]').forEach(function(a){
-    a.addEventListener('click',function(e){
-      e.preventDefault();
-      var targetId=a.getAttribute('data-target');
-      /* id 직접 탐색 + data-sec 속성으로 fallback */
-      var t=document.getElementById(targetId)
-        ||wrap.querySelector('[data-sec="'+targetId.replace('wk-','')+'"]')
-        ||wrap.querySelector('[id="'+targetId+'"]');
-      if(!t)return;
-      /* 접힌 섹션 펼치기 */
-      var node=t.parentNode;
-      while(node&&node!==wrap){
-        if(node.classList&&node.classList.contains('section-body')&&node.classList.contains('collapsed')){
-          node.classList.remove('collapsed');
-          var sec=node.id?node.id.replace('body-',''):'';
-          if(sec){
-            var h2=wrap.querySelector('.wiki-h2[data-sec="'+sec+'"]');
-            var li=document.getElementById('toc-li-'+sec);
-            if(h2)h2.classList.remove('collapsed');
-            if(li)li.classList.remove('toc-collapsed');
-          }
-        }
-        node=node.parentNode;
-      }
-      setTimeout(function(){t.scrollIntoView({behavior:'smooth',block:'start'});},280);
-    });
-  });
-
-  /* ── H2 클릭 → 접기/펼치기 ── */
-  wrap.querySelectorAll('.wiki-h2[data-sec]').forEach(function(h){
-    var sec=h.getAttribute('data-sec');
-    var body=document.getElementById('body-'+sec)||wrap.querySelector('[id="body-'+sec+'"]');
-    var li=document.getElementById('toc-li-'+sec);
-    if(!body)return;
-    h.addEventListener('click',function(){
-      body.classList.toggle('collapsed');
-      h.classList.toggle('collapsed');
-      if(li)li.classList.toggle('toc-collapsed');
-    });
-  });
-
-  /* ── 각주 말풍선 ── */
-  var tip=wrap.querySelector('.wk-fn-tooltip');
-  if(!tip)return;
-  var fnMap={};
-  wrap.querySelectorAll('.footnote-section li[id^="wk-fn"]').forEach(function(li){
-    fnMap[li.id.replace('wk-fn','')]=li.textContent.replace(/^\\s*↑\\s*/,'').trim();
-  });
-  function showTip(sup){
-    var num=sup.getAttribute('data-fn'),txt=fnMap[num];
-    if(!txt)return;
-    tip.textContent='['+num+'] '+txt;
-    tip.className='wk-fn-tooltip visible';
-    tip.style.left='-9999px';tip.style.top='-9999px';
-    var sr=sup.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
-    var vp={w:window.innerWidth,h:window.innerHeight};
-    var left=sr.left+sr.width/2-tw/2;
-    left=Math.max(8,Math.min(left,vp.w-tw-8));
-    var above=sr.top-10-th,below=sr.bottom+10,top,dir;
-    if(above>=8){top=above;dir='arr-down';}else{top=below;dir='arr-up';}
-    top=Math.max(8,Math.min(top,vp.h-th-8));
-    tip.style.left=left+'px';tip.style.top=top+'px';
-    tip.className='wk-fn-tooltip visible '+dir;
-    var arrX=Math.round(sr.left+sr.width/2-left);
-    tip.style.setProperty('--wk-arr',Math.max(12,Math.min(arrX,tw-12))+'px');
-  }
-  wrap.querySelectorAll('sup.fn').forEach(function(sup){
-    sup.addEventListener('mouseenter',function(){showTip(sup);});
-    sup.addEventListener('mouseleave',function(){tip.className='wk-fn-tooltip';});
-    sup.addEventListener('click',function(e){
-      e.stopPropagation();
-      tip.classList.contains('visible')?tip.className='wk-fn-tooltip':showTip(sup);
-    });
-  });
-  document.addEventListener('click',function(){tip.className='wk-fn-tooltip';});
-
-  /* ── 더보기 ── */
-  wrap.querySelectorAll('[data-ke-type="moreLess"]').forEach(function(el){
+  document.querySelectorAll('[data-ke-type="moreLess"]').forEach(function(el){
     var btn=el.querySelector('.btn-toggle-moreless'),content=el.querySelector('.moreless-content');
     if(!btn||!content)return;
     var m=el.getAttribute('data-text-more')||'더보기',l=el.getAttribute('data-text-less')||'닫기';
@@ -1748,7 +1685,6 @@ ${sectionsHtml}
 
 ${fnHtml}
 
-<div class="wk-fn-tooltip"></div>
 </div>
 <scr` + `ipt>
 ${js.trim()}
