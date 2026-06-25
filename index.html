@@ -1426,7 +1426,7 @@ ${state.fonts.body?.customCss ? `.wiki-wrap { ${state.fonts.body.customCss.trim(
 .wiki-wrap sup.fn:hover { color: #1a4a99; }
 
 /* 말풍선 툴팁 */
-#wk-fn-tooltip {
+.wk-fn-tooltip {
   display: none; position: fixed;
   background: #fff; border: 1px solid var(--wk-border, #a2a9b1); border-radius: 8px;
   padding: 10px 14px;
@@ -1439,12 +1439,12 @@ ${state.fonts.body?.customCss ? `.wiki-wrap { ${state.fonts.body.customCss.trim(
   box-shadow: 0 4px 16px rgba(0,0,0,.15);
   z-index: 2147483647; pointer-events: none;
 }
-#wk-fn-tooltip.visible { display: block; }
-#wk-fn-tooltip::after, #wk-fn-tooltip::before { content:''; position:absolute; left:var(--wk-arr,50%); border:7px solid transparent; }
-#wk-fn-tooltip.arr-down::after  { top:100%; border-top-color:#a2a9b1; }
-#wk-fn-tooltip.arr-down::before { top:calc(100% - 1px); border-top-color:#fff; z-index:1; }
-#wk-fn-tooltip.arr-up::after    { bottom:100%; border-bottom-color:#a2a9b1; }
-#wk-fn-tooltip.arr-up::before   { bottom:calc(100% - 1px); border-bottom-color:#fff; z-index:1; }
+.wk-fn-tooltip.visible { display: block; }
+.wk-fn-tooltip::after, .wk-fn-tooltip::before { content:''; position:absolute; left:var(--wk-arr,50%); border:7px solid transparent; }
+.wk-fn-tooltip.arr-down::after  { top:100%; border-top-color:#a2a9b1; }
+.wk-fn-tooltip.arr-down::before { top:calc(100% - 1px); border-top-color:#fff; z-index:1; }
+.wk-fn-tooltip.arr-up::after    { bottom:100%; border-bottom-color:#a2a9b1; }
+.wk-fn-tooltip.arr-up::before   { bottom:calc(100% - 1px); border-bottom-color:#fff; z-index:1; }
 
 /* 각주 섹션 */
 .wiki-wrap .footnote-section {
@@ -1558,7 +1558,7 @@ ${tableRows}
       const num=numBase?`${numBase}.${si+1}`:`${si+1}`;
       const nc=depth===0?'toc-num':depth===1?'toc-num-sub':'toc-num-sub2';
       const liId=depth===0?` id="toc-li-${sec.id}"`:'';
-      h+=`<li${liId}><a href="#" data-target="wk-${sec.id}"><span class="${nc}">${num}.</span> ${escHtml(sec.title)}</a>`;
+      h+=`<li${liId}><a href="javascript:void(0)" data-target="wk-${sec.id}"><span class="${nc}">${num}.</span> ${escHtml(sec.title)}</a>`;
       if(sec.children&&sec.children.length) h+='\n'+buildTocHtml(sec.children,depth+1,num);
       h+=`</li>\n`;
     });
@@ -1607,6 +1607,11 @@ ${state.footnotes.map((fn,i)=>`<li id="wk-fn${escAttr(fn.label)}"><span class="f
   // ── JS ──
   const js = `
 (function(){
+  /* ── 툴팁 요소: wiki-wrap 안에서 찾기 ── */
+  var wrap=document.querySelector('.wiki-wrap');
+  if(!wrap)return;
+
+  /* ── 목차 숨기기/보이기 ── */
   var tocBtn=document.getElementById('wk-toc-btn'),tocInner=document.getElementById('wk-toc-inner');
   if(tocBtn&&tocInner){
     tocBtn.addEventListener('click',function(e){
@@ -1616,65 +1621,95 @@ ${state.footnotes.map((fn,i)=>`<li id="wk-fn${escAttr(fn.label)}"><span class="f
       tocBtn.textContent=h?'숨기기':'보이기';
     });
   }
-  document.querySelectorAll('.wiki-wrap .toc-inner a[data-target]').forEach(function(a){
+
+  /* ── 목차 클릭 → 이동 ── */
+  wrap.querySelectorAll('.toc-inner a[data-target]').forEach(function(a){
     a.addEventListener('click',function(e){
       e.preventDefault();
-      var t=document.getElementById(a.getAttribute('data-target'));
+      var targetId=a.getAttribute('data-target');
+      /* id 직접 탐색 + data-sec 속성으로 fallback */
+      var t=document.getElementById(targetId)
+        ||wrap.querySelector('[data-sec="'+targetId.replace('wk-','')+'"]')
+        ||wrap.querySelector('[id="'+targetId+'"]');
       if(!t)return;
-      var b=null,p=t.parentNode;
-      while(p){if(p.classList&&p.classList.contains('section-body')){b=p;break;}p=p.parentNode;}
-      if(b&&b.classList.contains('collapsed')){
-        b.classList.remove('collapsed');
-        var sec=b.id.replace('body-','');
-        var h2=document.querySelector('.wiki-wrap .wiki-h2[data-sec="'+sec+'"]');
-        var li=document.getElementById('toc-li-'+sec);
-        if(h2)h2.classList.remove('collapsed');
-        if(li)li.classList.remove('toc-collapsed');
+      /* 접힌 섹션 펼치기 */
+      var node=t.parentNode;
+      while(node&&node!==wrap){
+        if(node.classList&&node.classList.contains('section-body')&&node.classList.contains('collapsed')){
+          node.classList.remove('collapsed');
+          var sec=node.id?node.id.replace('body-',''):'';
+          if(sec){
+            var h2=wrap.querySelector('.wiki-h2[data-sec="'+sec+'"]');
+            var li=document.getElementById('toc-li-'+sec);
+            if(h2)h2.classList.remove('collapsed');
+            if(li)li.classList.remove('toc-collapsed');
+          }
+        }
+        node=node.parentNode;
       }
       setTimeout(function(){t.scrollIntoView({behavior:'smooth',block:'start'});},280);
     });
   });
-  document.querySelectorAll('.wiki-wrap .wiki-h2[data-sec]').forEach(function(h){
-    var sec=h.getAttribute('data-sec'),body=document.getElementById('body-'+sec),li=document.getElementById('toc-li-'+sec);
+
+  /* ── H2 클릭 → 접기/펼치기 ── */
+  wrap.querySelectorAll('.wiki-h2[data-sec]').forEach(function(h){
+    var sec=h.getAttribute('data-sec');
+    var body=document.getElementById('body-'+sec)||wrap.querySelector('[id="body-'+sec+'"]');
+    var li=document.getElementById('toc-li-'+sec);
     if(!body)return;
-    h.addEventListener('click',function(){body.classList.toggle('collapsed');h.classList.toggle('collapsed');if(li)li.classList.toggle('toc-collapsed');});
+    h.addEventListener('click',function(){
+      body.classList.toggle('collapsed');
+      h.classList.toggle('collapsed');
+      if(li)li.classList.toggle('toc-collapsed');
+    });
   });
-  var tip=document.getElementById('wk-fn-tooltip');
+
+  /* ── 각주 말풍선 ── */
+  var tip=wrap.querySelector('.wk-fn-tooltip');
   if(!tip)return;
   var fnMap={};
-  document.querySelectorAll('.wiki-wrap .footnote-section li[id^="wk-fn"]').forEach(function(li){
+  wrap.querySelectorAll('.footnote-section li[id^="wk-fn"]').forEach(function(li){
     fnMap[li.id.replace('wk-fn','')]=li.textContent.replace(/^\\s*↑\\s*/,'').trim();
   });
   function showTip(sup){
     var num=sup.getAttribute('data-fn'),txt=fnMap[num];
     if(!txt)return;
     tip.textContent='['+num+'] '+txt;
-    tip.className='visible';
+    tip.className='wk-fn-tooltip visible';
     tip.style.left='-9999px';tip.style.top='-9999px';
-    var sr=sup.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight,vp={w:window.innerWidth,h:window.innerHeight};
+    var sr=sup.getBoundingClientRect(),tw=tip.offsetWidth,th=tip.offsetHeight;
+    var vp={w:window.innerWidth,h:window.innerHeight};
     var left=sr.left+sr.width/2-tw/2;
     left=Math.max(8,Math.min(left,vp.w-tw-8));
     var above=sr.top-10-th,below=sr.bottom+10,top,dir;
     if(above>=8){top=above;dir='arr-down';}else{top=below;dir='arr-up';}
     top=Math.max(8,Math.min(top,vp.h-th-8));
     tip.style.left=left+'px';tip.style.top=top+'px';
-    tip.className='visible '+dir;
+    tip.className='wk-fn-tooltip visible '+dir;
     var arrX=Math.round(sr.left+sr.width/2-left);
-    arrX=Math.max(12,Math.min(arrX,tw-12));
-    tip.style.setProperty('--wk-arr',arrX+'px');
+    tip.style.setProperty('--wk-arr',Math.max(12,Math.min(arrX,tw-12))+'px');
   }
-  document.querySelectorAll('.wiki-wrap sup.fn').forEach(function(sup){
+  wrap.querySelectorAll('sup.fn').forEach(function(sup){
     sup.addEventListener('mouseenter',function(){showTip(sup);});
-    sup.addEventListener('mouseleave',function(){tip.className='';});
-    sup.addEventListener('click',function(e){e.stopPropagation();tip.className===''?showTip(sup):(tip.className='');});
+    sup.addEventListener('mouseleave',function(){tip.className='wk-fn-tooltip';});
+    sup.addEventListener('click',function(e){
+      e.stopPropagation();
+      tip.classList.contains('visible')?tip.className='wk-fn-tooltip':showTip(sup);
+    });
   });
-  document.addEventListener('click',function(){if(tip)tip.className='';});
-  document.querySelectorAll('[data-ke-type="moreLess"]').forEach(function(el){
+  document.addEventListener('click',function(){tip.className='wk-fn-tooltip';});
+
+  /* ── 더보기 ── */
+  wrap.querySelectorAll('[data-ke-type="moreLess"]').forEach(function(el){
     var btn=el.querySelector('.btn-toggle-moreless'),content=el.querySelector('.moreless-content');
     if(!btn||!content)return;
     var m=el.getAttribute('data-text-more')||'더보기',l=el.getAttribute('data-text-less')||'닫기';
     btn.textContent=m;
-    btn.addEventListener('click',function(){var o=content.style.display==='block';content.style.display=o?'none':'block';btn.textContent=o?m:l;});
+    btn.addEventListener('click',function(){
+      var o=content.style.display==='block';
+      content.style.display=o?'none':'block';
+      btn.textContent=o?m:l;
+    });
   });
 })();
 `;
@@ -1713,8 +1748,8 @@ ${sectionsHtml}
 
 ${fnHtml}
 
+<div class="wk-fn-tooltip"></div>
 </div>
-<div id="wk-fn-tooltip"></div>
 <scr` + `ipt>
 ${js.trim()}
 <\/script>
